@@ -78,17 +78,27 @@ if (( ${#notes} )) && [[ $level == OK ]]; then level=WARN; rc=1; fi   # never de
 sc_log "guard $level pct=$pct free=$free snaps=$snaps notes=${(j:,:)notes}"
 
 # ---- de-dup: renotify only on escalation, or once per SC_RENOTIFY_H hours ---
+# State holds TWO independent facts, and conflating them is a bug: the last level
+# SEEN (drives change detection, always updated) and the last time we actually
+# NOTIFIED (drives the repeat window, updated only when a notification fires).
+# With one field, a --quiet run silently consumes a pending level change and the
+# real notification never happens.
 : ${SC_RENOTIFY_H:=12}
-local prev_level="" prev_ts=0
-[[ -r $STATE ]] && IFS=$'\t' read -r prev_level prev_ts < $STATE
+local prev_level="" prev_notify_ts=0
+[[ -r $STATE ]] && IFS=$'\t' read -r prev_level prev_notify_ts < $STATE
 local now=$(date +%s)
-printf '%s\t%s\n' $level $now > $STATE
 
 local should_notify=0
-if   (( force ));                                   then should_notify=1
-elif [[ $level != OK && $level != $prev_level ]];   then should_notify=1
-elif [[ $level != OK ]] && (( now - prev_ts > SC_RENOTIFY_H * 3600 )); then should_notify=1
+if   (( force ));                                                            then should_notify=1
+elif [[ $level != OK && $level != $prev_level ]];                            then should_notify=1
+elif [[ $level != OK ]] && (( now - prev_notify_ts > SC_RENOTIFY_H * 3600 )); then should_notify=1
 fi
+
+# A suppressed notification must not advance the notify clock, so a later
+# non-quiet run still delivers it.
+local notify_ts=$prev_notify_ts
+(( should_notify && ! quiet )) && notify_ts=$now
+printf '%s\t%s\n' $level $notify_ts > $STATE
 
 # ---- output -----------------------------------------------------------------
 case $level in

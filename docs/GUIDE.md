@@ -389,6 +389,25 @@ healthy when it cannot tell is worse than no check.
 launchd rather than cron: launchd runs a missed interval on wake, so a sleeping
 laptop still gets checked, and it runs in the GUI session that notifications need.
 
+### Alerting policy
+
+The guard *checks* every 2 hours but *notifies* only on a level change, or once
+per `SC_RENOTIFY_H` (12) hours while a condition persists. Never on OK. A CRIT
+nag every two hours for something you already know about trains you to ignore it.
+
+So a quiet notification tray is the expected steady state — `make log` is how you
+confirm it is alive:
+
+```bash
+make log
+```
+
+The state file holds two independent facts: the last level *seen*, which always
+updates and drives change detection, and the last time a notification actually
+*fired*, which drives the repeat window. Keeping them in one field is a bug: a
+`--quiet` run would silently consume a pending level change and the real
+notification would never arrive.
+
 ---
 
 ## 8. Safety rules these scripts follow
