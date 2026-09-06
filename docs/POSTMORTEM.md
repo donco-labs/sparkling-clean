@@ -144,6 +144,39 @@ side by side.
    context and never do. Each check owns its verdict and its wording, the overall
    level is the worst check, and the notification names that subsystem.
 
-10. **Threshold alerting beats forensics.** Every signal — jetsam events, disk-write
+10. **An orphaned backup that nothing can delete.** Every backup logged 48
+    failures per 12 hours trying to reap `2026-05-24-080252.previous`. Three tools
+    refused it for three unrelated reasons:
+
+    - `tmutil delete` → error 22, *Invalid deletion target*. The `.previous` name
+      keeps it out of the backup index, and tmutil only acts on indexed backups.
+    - Time Machine's own thinning → `Expected SnapshotInProgressContainer metadata
+      type but found APFSBackup`. A *completed* backup wearing an *in-progress*
+      name, so thinning will not touch it.
+    - `rm -rf` → `Directory not empty` on a directory that both `ls` and
+      `find -mindepth 1` report as empty, with its Time Machine xattr already
+      stripped. The SMB server tracks entries it does not expose to the client,
+      and you cannot unlink what you cannot name.
+
+    Two theories were wrong on the way: a Spotlight lock (73 `mds_store` handles
+    were open on the volume, but none provably on this path) and the
+    `com.apple.timemachine.private.directorycompletiondate` xattr (removed
+    successfully; `rmdir` still refused). Only a delete performed on the NAS
+    itself can clear it. Left in place — it costs one failed `rmdir` per backup
+    and no space, and cannot affect restores because it is not in the index.
+
+    The generalisation worth keeping is about *stopping*. This began as "why does
+    my Mac freeze" and ended at "an empty folder annoys Time Machine's logger".
+    Knowing which findings deserve a fourth attempt and which deserve a footnote
+    is part of the work.
+
+11. **Spotlight was indexing the backup destination.** 73 `mds_store` handles on
+    an 819 GB sparsebundle over SMB, competing with every backup for the same
+    link, indexing something you cannot usefully search. `mdutil -i off <volume>`
+    does *not* disable it — it drops to `kMDConfigSearchLevelFSSearchOnly` and
+    still reports `Indexing enabled`. Use Spotlight Search Privacy, with the
+    volume mounted.
+
+12. **Threshold alerting beats forensics.** Every signal — jetsam events, disk-write
    diags, falling free space — was present for days beforehand. Nothing was
    watching. → `disk-guard.zsh` + launchd.
