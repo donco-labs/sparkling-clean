@@ -216,7 +216,9 @@ sc_level_rank() { case $1 in (CRIT) print -r -- 2 ;; (WARN) print -r -- 1 ;; (*)
 
 # Worst check wins. Returns the whole record so callers can name the subsystem.
 sc_worst_check() {
-  local c best=0 r winner=""
+  # best starts below the lowest rank so an all-OK run still names a subject;
+  # otherwise nothing is ever selected and callers get an empty record.
+  local c best=-1 r winner=""
   for c in $SC_CHECKS; do
     r=$(sc_level_rank ${c%%$'\t'*})
     (( r > best )) && { best=$r; winner=$c }
