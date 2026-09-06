@@ -8,7 +8,7 @@
     --rule:#e2ded1; --rule-2:#efece2; --pencil:#b4462a; --pencil-soft:#f7e9e4;
     color-scheme:light;
     --f-surface-1:#fcfcfb; --f-ink:#0b0b0b; --f-ink-2:#52514e; --f-ink-3:#82817c;
-    --f-rule:#e3e2dd; --f-grid:#eeedea; --f-s1:#2a78d6; --f-s2:#eb6834;
+    --f-rule:#e3e2dd; --f-grid:#e6e4de; --f-s1:#2a78d6; --f-s2:#eb6834;
     --f-s3:#1baf7a; --f-s4:#eda100; --f-gray:#b9b8b2; --f-crit:#c0392b;
   }
   @media (prefers-color-scheme:dark){
@@ -70,27 +70,44 @@
   td:first-child{color:var(--ink)}
 
   /* ---------- tipped-in plates ---------- */
-  .plate{margin:2.6em 0 2.8em;width:min(1124px,calc(100vw - 56px));
-    position:relative;left:50%;transform:translateX(-50%);overflow-x:auto;
+  /* The figures are authored at a fixed 1400px. `zoom` scales them to the
+     column AND reflows, so the plate's height follows automatically — a
+     transform would have left the original height behind as dead space, and
+     overflow scrolling (the previous behaviour) put a scrollbar on every one. */
+  .plate{margin:2.6em 0 2.8em;width:min(1180px,calc(100vw - 40px));
+    position:relative;left:50%;transform:translateX(-50%);overflow:hidden;
     border:1px solid var(--rule);border-radius:3px;background:var(--f-surface-1)}
-  .plate .fig{font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  .plate .fig{font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    zoom:.842}
   .plate *{box-sizing:border-box}
-  .plate .fig{width:1400px;transform-origin:top left;background:var(--f-surface-1);padding:56px 64px;color:var(--f-ink)}
+  @media(max-width:1239px){ .plate .fig{zoom:.66} .plate{width:calc(100vw - 40px)} }
+  @media(max-width:899px){  .plate .fig{zoom:.50} }
+  @media(max-width:659px){  .plate .fig{zoom:.34} .plate{width:calc(100vw - 24px)} }
+
+
+  :root{
+    --f-surface-1:#fcfcfb; --f-ink:#0b0b0b; --f-ink-2:#52514e; --f-ink-3:#82817c;
+    --f-rule:#e3e2dd; --f-grid:#e6e4de;
+    --f-s1:#2a78d6; --f-s2:#eb6834; --f-s3:#1baf7a; --f-s4:#eda100;
+    --f-gray:#b9b8b2; --f-crit:#c0392b;
+  }
+  *{box-sizing:border-box}
+  .plate .fig{width:1400px;background:var(--f-surface-1);padding:56px 64px;color:var(--f-ink)}
   .plate .cap{font-size:15px;color:var(--f-ink-3);letter-spacing:.09em;text-transform:uppercase;font-weight:600;margin:0 0 10px}
-  h2{font-size:38px;line-height:1.15;margin:0 0 8px;letter-spacing:-.02em;font-weight:700}
+  .plate h2{font-family:inherit;font-size:38px;line-height:1.15;margin:0 0 8px;letter-spacing:-.02em;font-weight:700}
   .plate .sub{font-size:20px;color:var(--f-ink-2);margin:0 0 40px;max-width:78ch;line-height:1.45}
   .plate .note{font-size:16px;color:var(--f-ink-3);margin-top:34px;line-height:1.5}
 
   /* ---------- flow chain ---------- */
   .plate .chain{display:flex;flex-direction:column;gap:0}
-  .plate .step{display:flex;align-items:flex-start;gap:24px;padding:20px 26px;border-radius:10px;background:#f4f3f0}
+  .plate .step{display:flex;align-items:flex-start;gap:24px;padding:20px 26px;border-radius:10px;background:#eef4fb}
   .plate .step.hot{background:#fdeeeb}
-  .plate .step .n{flex:0 0 38px;height:38px;border-radius:50%;background:var(--f-ink);color:#fff;
+  .plate .step .n{flex:0 0 38px;height:38px;border-radius:50%;background:var(--f-s1);color:#fff;
            display:flex;align-items:center;justify-content:center;font-weight:700;font-size:17px}
   .plate .step.hot .n{background:var(--f-crit)}
   .plate .step .t{font-size:23px;font-weight:650;line-height:1.3}
   .plate .step .d{font-size:17px;color:var(--f-ink-2);margin-top:5px;line-height:1.45}
-  .plate .arrow{height:26px;margin-left:45px;border-left:3px solid var(--f-rule)}
+  .plate .arrow{height:26px;margin-left:45px;border-left:3px solid #cfd9e4}
   .plate .step.hot .t{color:var(--f-crit)}
 
   /* ---------- bars ---------- */
@@ -118,7 +135,7 @@
   /* ---------- timeline ---------- */
   .plate .tl{position:relative;height:150px;margin:20px 0 8px}
   .plate .axis{position:absolute;left:0;right:0;top:78px;height:3px;background:var(--f-rule)}
-  .plate .tick{position:absolute;top:60px;width:5px;height:38px;border-radius:3px;background:var(--f-s1)}
+  .plate .tick{position:absolute;top:60px;width:6px;height:38px;border-radius:3px;background:var(--f-s1)}
   .plate .tick.late{background:var(--f-s3)}
   .plate .gap{position:absolute;top:44px;height:70px;background:#fdeeeb;border-radius:8px;
        border:2px dashed #eab5ac}
@@ -128,16 +145,19 @@
 
   /* ---------- scoreboard ---------- */
   .plate .score{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;background:var(--f-rule)}
-  .plate .cell{background:var(--f-surface-1);padding:30px 26px}
+  .plate .cell{background:var(--f-surface-1);padding:26px 26px 30px;border-top:4px solid var(--f-c)}
   .plate .cell .k{font-size:16px;color:var(--f-ink-3);text-transform:uppercase;letter-spacing:.08em;font-weight:600}
   .plate .cell .before{font-size:26px;color:var(--f-ink-3);margin-top:16px;text-decoration:line-through;
                 text-decoration-thickness:2px;font-variant-numeric:tabular-nums}
   .plate .cell .after{font-size:44px;font-weight:700;margin-top:6px;letter-spacing:-.02em;
                font-variant-numeric:tabular-nums;line-height:1.05}
-  .plate .cell.good .after{color:var(--f-s3)}
+  .plate .cell .after{color:var(--f-c)}
   .plate .legend{display:flex;gap:26px;margin-bottom:26px;flex-wrap:wrap}
   .plate .lgi{display:flex;align-items:center;gap:9px;font-size:17px;color:var(--f-ink-2)}
   .plate .lgs{width:14px;height:14px;border-radius:3px}
+
+  .plate h2::before{content:none}
+  .plate h3{font-family:inherit}
 
   footer{margin:80px 0 0;padding-top:26px;border-top:1px solid var(--rule);
     font-size:16px;color:var(--ink-3)}
@@ -198,10 +218,10 @@ GetLogPage failed: system=0x38, sub=0x0, code=745</code></pre>
     and the ratio between them is the diagnosis.</p>
   <div class="bars">
     <div class="row"><div class="lbl">Data read</div>
-      <div class="track"><div class="bar" style="width:100%;background:var(--s1)"></div></div>
+      <div class="track"><div class="bar" style="width:100%;background:var(--f-s1)"></div></div>
       <div class="val">39.5 TB <small>· 90 GB/hour</small></div></div>
     <div class="row"><div class="lbl">Data written</div>
-      <div class="track"><div class="bar" style="width:34.9%;background:var(--gray)"></div></div>
+      <div class="track"><div class="bar" style="width:34.9%;background:var(--f-s2)"></div></div>
       <div class="val">13.8 TB</div></div>
   </div>
   <p class="note">Across 438 powered-on hours. Heavy <em>writing</em> means a busy machine.
@@ -339,33 +359,33 @@ $ du -h Docker.raw
   <p class="sub">On a network destination every file is a round-trip — going in, and again when the
     backup is later thinned. The biggest directories are not the expensive ones.</p>
   <div class="legend">
-    <div class="lgi"><span class="lgs" style="background:var(--s1)"></span>~/.cache</div>
-    <div class="lgi"><span class="lgs" style="background:var(--s2)"></span>Docker image</div>
-    <div class="lgi"><span class="lgs" style="background:var(--s3)"></span>~/.ollama</div>
-    <div class="lgi"><span class="lgs" style="background:var(--s4)"></span>~/.pub-cache</div>
+    <div class="lgi"><span class="lgs" style="background:var(--f-s1)"></span>~/.cache</div>
+    <div class="lgi"><span class="lgs" style="background:var(--f-s2)"></span>Docker image</div>
+    <div class="lgi"><span class="lgs" style="background:var(--f-s3)"></span>~/.ollama</div>
+    <div class="lgi"><span class="lgs" style="background:var(--f-s4)"></span>~/.pub-cache</div>
   </div>
   <div class="panels">
     <div class="panel">
       <h3>Ranked by size</h3><p class="ph">what you would think to exclude</p>
-      <div class="prow"><span class="swatch" style="background:var(--s2)"></span><span class="pname">Docker image</span>
-        <span class="ptrack"><span class="pbar" style="width:100%;background:var(--s2)"></span></span><span class="pval">24.1 GB</span></div>
-      <div class="prow"><span class="swatch" style="background:var(--s1)"></span><span class="pname">~/.cache</span>
-        <span class="ptrack"><span class="pbar" style="width:36.5%;background:var(--s1)"></span></span><span class="pval">8.8 GB</span></div>
-      <div class="prow"><span class="swatch" style="background:var(--s3)"></span><span class="pname">~/.ollama</span>
-        <span class="ptrack"><span class="pbar" style="width:27.4%;background:var(--s3)"></span></span><span class="pval">6.6 GB</span></div>
-      <div class="prow"><span class="swatch" style="background:var(--s4)"></span><span class="pname">~/.pub-cache</span>
-        <span class="ptrack"><span class="pbar" style="width:5%;background:var(--s4)"></span></span><span class="pval">1.2 GB</span></div>
+      <div class="prow"><span class="swatch" style="background:var(--f-s2)"></span><span class="pname">Docker image</span>
+        <span class="ptrack"><span class="pbar" style="width:100%;background:var(--f-s2)"></span></span><span class="pval">24.1 GB</span></div>
+      <div class="prow"><span class="swatch" style="background:var(--f-s1)"></span><span class="pname">~/.cache</span>
+        <span class="ptrack"><span class="pbar" style="width:36.5%;background:var(--f-s1)"></span></span><span class="pval">8.8 GB</span></div>
+      <div class="prow"><span class="swatch" style="background:var(--f-s3)"></span><span class="pname">~/.ollama</span>
+        <span class="ptrack"><span class="pbar" style="width:27.4%;background:var(--f-s3)"></span></span><span class="pval">6.6 GB</span></div>
+      <div class="prow"><span class="swatch" style="background:var(--f-s4)"></span><span class="pname">~/.pub-cache</span>
+        <span class="ptrack"><span class="pbar" style="width:5%;background:var(--f-s4)"></span></span><span class="pval">1.2 GB</span></div>
     </div>
     <div class="panel">
       <h3>Ranked by file count</h3><p class="ph">what actually costs you</p>
-      <div class="prow"><span class="swatch" style="background:var(--s1)"></span><span class="pname">~/.cache</span>
-        <span class="ptrack"><span class="pbar" style="width:100%;background:var(--s1)"></span></span><span class="pval">107,760</span></div>
-      <div class="prow"><span class="swatch" style="background:var(--s4)"></span><span class="pname">~/.pub-cache</span>
-        <span class="ptrack"><span class="pbar" style="width:56.9%;background:var(--s4)"></span></span><span class="pval">61,296</span></div>
-      <div class="prow"><span class="swatch" style="background:var(--s2)"></span><span class="pname">Docker image</span>
-        <span class="ptrack"><span class="pbar" style="width:0.9%;background:var(--s2)"></span></span><span class="pval">148</span></div>
-      <div class="prow"><span class="swatch" style="background:var(--s3)"></span><span class="pname">~/.ollama</span>
-        <span class="ptrack"><span class="pbar" style="width:0.4%;background:var(--s3)"></span></span><span class="pval">29</span></div>
+      <div class="prow"><span class="swatch" style="background:var(--f-s1)"></span><span class="pname">~/.cache</span>
+        <span class="ptrack"><span class="pbar" style="width:100%;background:var(--f-s1)"></span></span><span class="pval">107,760</span></div>
+      <div class="prow"><span class="swatch" style="background:var(--f-s4)"></span><span class="pname">~/.pub-cache</span>
+        <span class="ptrack"><span class="pbar" style="width:56.9%;background:var(--f-s4)"></span></span><span class="pval">61,296</span></div>
+      <div class="prow"><span class="swatch" style="background:var(--f-s2)"></span><span class="pname">Docker image</span>
+        <span class="ptrack"><span class="pbar" style="width:0.9%;background:var(--f-s2)"></span></span><span class="pval">148</span></div>
+      <div class="prow"><span class="swatch" style="background:var(--f-s3)"></span><span class="pname">~/.ollama</span>
+        <span class="ptrack"><span class="pbar" style="width:0.4%;background:var(--f-s3)"></span></span><span class="pval">29</span></div>
     </div>
   </div>
   <p class="note"><strong>~/.ollama is five times larger than ~/.pub-cache and roughly two thousand
@@ -407,16 +427,16 @@ $ du -h Docker.raw
   <p class="sub">No parts replaced. The SSD reported 0 media errors and 0% endurance used
     throughout.</p>
   <div class="score">
-    <div class="cell good"><div class="k">Free space</div><div class="before">36.6 GB</div><div class="after">116.7 GB</div></div>
-    <div class="cell good"><div class="k">Swap available</div><div class="before">0 MB</div><div class="after">3,072 MB</div></div>
-    <div class="cell good"><div class="k">Last backup</div><div class="before">62 days</div><div class="after">Today</div></div>
-    <div class="cell good"><div class="k">Backup duration</div><div class="before">10.5 hrs</div><div class="after">5–10 min</div></div>
+    <div class="cell" style="--f-c:var(--f-s1)"><div class="k">Free space</div><div class="before">36.6 GB</div><div class="after">116.7 GB</div></div>
+    <div class="cell" style="--f-c:var(--f-s3)"><div class="k">Swap available</div><div class="before">0 MB</div><div class="after">3,072 MB</div></div>
+    <div class="cell" style="--f-c:var(--s7,#4a3aa7)"><div class="k">Last backup</div><div class="before">62 days</div><div class="after">Today</div></div>
+    <div class="cell" style="--f-c:var(--f-s2)"><div class="k">Backup duration</div><div class="before">10.5 hrs</div><div class="after">5–10 min</div></div>
   </div>
   <p class="note">The backup figure is the full re-seed against a routine incremental, after
     75 GB of reconstructible caches were excluded from the backup set.</p></div></figure>
 <p>Honest scoping, because I don't think this is universal.</p>
 <p>This bites when three conditions coincide: <strong>a nearly-full disk, a slow backup destination, and a heavy polyglot toolchain.</strong> Miss any one and you never see it.</p>
-<p>- With 500 GB free, the swap valve never fails and none of this happens. - With a fast local SSD as your destination, the file-count cost is still there — it's just ninety seconds instead of ten hours, so you never notice. - Most developers never back up a dev machine at all beyond git and cloud sync, and quietly accept that a rebuild costs a day.</p>
+<ul><li>With 500 GB free, the swap valve never fails and none of this happens.</li><li>With a fast local SSD as your destination, the file-count cost is still there — it's just ninety seconds instead of ten hours, so you never notice.</li><li>Most developers never back up a dev machine at all beyond git and cloud sync, and quietly accept that a rebuild costs a day.</li></ul>
 <p>I'd been running all three conditions for months without knowing. The disk crept up, the backups died, and macOS never mentioned either.</p>
 <h2>Four checks worth running right now</h2>
 <p>They take under a minute.</p>

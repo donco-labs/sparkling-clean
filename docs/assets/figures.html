@@ -2,7 +2,7 @@
 <style>
   :root{
     --surface-1:#fcfcfb; --ink:#0b0b0b; --ink-2:#52514e; --ink-3:#82817c;
-    --rule:#e3e2dd; --grid:#eeedea;
+    --rule:#e3e2dd; --grid:#e6e4de;
     --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100;
     --gray:#b9b8b2; --crit:#c0392b;
   }
@@ -17,14 +17,14 @@
 
   /* ---------- flow chain ---------- */
   .chain{display:flex;flex-direction:column;gap:0}
-  .step{display:flex;align-items:flex-start;gap:24px;padding:20px 26px;border-radius:10px;background:#f4f3f0}
+  .step{display:flex;align-items:flex-start;gap:24px;padding:20px 26px;border-radius:10px;background:#eef4fb}
   .step.hot{background:#fdeeeb}
-  .step .n{flex:0 0 38px;height:38px;border-radius:50%;background:var(--ink);color:#fff;
+  .step .n{flex:0 0 38px;height:38px;border-radius:50%;background:var(--s1);color:#fff;
            display:flex;align-items:center;justify-content:center;font-weight:700;font-size:17px}
   .step.hot .n{background:var(--crit)}
   .step .t{font-size:23px;font-weight:650;line-height:1.3}
   .step .d{font-size:17px;color:var(--ink-2);margin-top:5px;line-height:1.45}
-  .arrow{height:26px;margin-left:45px;border-left:3px solid var(--rule)}
+  .arrow{height:26px;margin-left:45px;border-left:3px solid #cfd9e4}
   .step.hot .t{color:var(--crit)}
 
   /* ---------- bars ---------- */
@@ -52,7 +52,7 @@
   /* ---------- timeline ---------- */
   .tl{position:relative;height:150px;margin:20px 0 8px}
   .axis{position:absolute;left:0;right:0;top:78px;height:3px;background:var(--rule)}
-  .tick{position:absolute;top:60px;width:5px;height:38px;border-radius:3px;background:var(--s1)}
+  .tick{position:absolute;top:60px;width:6px;height:38px;border-radius:3px;background:var(--s1)}
   .tick.late{background:var(--s3)}
   .gap{position:absolute;top:44px;height:70px;background:#fdeeeb;border-radius:8px;
        border:2px dashed #eab5ac}
@@ -62,13 +62,13 @@
 
   /* ---------- scoreboard ---------- */
   .score{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;background:var(--rule)}
-  .cell{background:var(--surface-1);padding:30px 26px}
+  .cell{background:var(--surface-1);padding:26px 26px 30px;border-top:4px solid var(--c)}
   .cell .k{font-size:16px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.08em;font-weight:600}
   .cell .before{font-size:26px;color:var(--ink-3);margin-top:16px;text-decoration:line-through;
                 text-decoration-thickness:2px;font-variant-numeric:tabular-nums}
   .cell .after{font-size:44px;font-weight:700;margin-top:6px;letter-spacing:-.02em;
                font-variant-numeric:tabular-nums;line-height:1.05}
-  .cell.good .after{color:var(--s3)}
+  .cell .after{color:var(--c)}
   .legend{display:flex;gap:26px;margin-bottom:26px;flex-wrap:wrap}
   .lgi{display:flex;align-items:center;gap:9px;font-size:17px;color:var(--ink-2)}
   .lgs{width:14px;height:14px;border-radius:3px}
@@ -115,7 +115,7 @@
       <div class="track"><div class="bar" style="width:100%;background:var(--s1)"></div></div>
       <div class="val">39.5 TB <small>· 90 GB/hour</small></div></div>
     <div class="row"><div class="lbl">Data written</div>
-      <div class="track"><div class="bar" style="width:34.9%;background:var(--gray)"></div></div>
+      <div class="track"><div class="bar" style="width:34.9%;background:var(--s2)"></div></div>
       <div class="val">13.8 TB</div></div>
   </div>
   <p class="note">Across 438 powered-on hours. Heavy <em>writing</em> means a busy machine.
@@ -199,10 +199,10 @@
   <p class="sub">No parts replaced. The SSD reported 0 media errors and 0% endurance used
     throughout.</p>
   <div class="score">
-    <div class="cell good"><div class="k">Free space</div><div class="before">36.6 GB</div><div class="after">116.7 GB</div></div>
-    <div class="cell good"><div class="k">Swap available</div><div class="before">0 MB</div><div class="after">3,072 MB</div></div>
-    <div class="cell good"><div class="k">Last backup</div><div class="before">62 days</div><div class="after">Today</div></div>
-    <div class="cell good"><div class="k">Backup duration</div><div class="before">10.5 hrs</div><div class="after">5–10 min</div></div>
+    <div class="cell" style="--c:var(--s1)"><div class="k">Free space</div><div class="before">36.6 GB</div><div class="after">116.7 GB</div></div>
+    <div class="cell" style="--c:var(--s3)"><div class="k">Swap available</div><div class="before">0 MB</div><div class="after">3,072 MB</div></div>
+    <div class="cell" style="--c:var(--s7,#4a3aa7)"><div class="k">Last backup</div><div class="before">62 days</div><div class="after">Today</div></div>
+    <div class="cell" style="--c:var(--s2)"><div class="k">Backup duration</div><div class="before">10.5 hrs</div><div class="after">5–10 min</div></div>
   </div>
   <p class="note">The backup figure is the full re-seed against a routine incremental, after
     75 GB of reconstructible caches were excluded from the backup set.</p>
