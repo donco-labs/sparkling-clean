@@ -155,15 +155,26 @@ side by side.
       name, so thinning will not touch it.
     - `rm -rf` → `Directory not empty` on a directory that both `ls` and
       `find -mindepth 1` report as empty, with its Time Machine xattr already
-      stripped. The SMB server tracks entries it does not expose to the client,
-      and you cannot unlink what you cannot name.
+      stripped. Entries are filtered out of `readdir` while `rmdir` still counts
+      them; you cannot unlink what you cannot name.
+    - Deleting it on the NAS → **impossible**. The destination is a single
+      sparsebundle (`diskutil` reports `Protocol: Disk Image`, case-sensitive
+      APFS, backed by `TimeMachineBackup/<host>.sparsebundle`). On the NAS there
+      is no such directory — only opaque band files. The structure exists solely
+      inside the disk image.
 
-    Two theories were wrong on the way: a Spotlight lock (73 `mds_store` handles
-    were open on the volume, but none provably on this path) and the
-    `com.apple.timemachine.private.directorycompletiondate` xattr (removed
-    successfully; `rmdir` still refused). Only a delete performed on the NAS
-    itself can clear it. Left in place — it costs one failed `rmdir` per backup
-    and no space, and cannot affect restores because it is not in the index.
+    Three theories were wrong on the way. A Spotlight lock: 73 `mds_store`
+    handles were open on the volume, but none provably on this path. The
+    `com.apple.timemachine.private.directorycompletiondate` xattr: removed
+    successfully, `rmdir` still refused. And an SMB server hiding entries: wrong
+    layer entirely — directory operations run in macOS's APFS driver against a
+    locally-mounted image, and SMB only carries band files.
+
+    **Check what a volume physically is before proposing a fix for it.**
+    `diskutil info` would have ruled out the NAS-side route immediately.
+
+    Left in place — it costs one failed `rmdir` per backup and no space, and
+    cannot affect restores because it is not in the index.
 
     The generalisation worth keeping is about *stopping*. This began as "why does
     my Mac freeze" and ended at "an empty folder annoys Time Machine's logger".
