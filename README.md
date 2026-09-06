@@ -23,16 +23,108 @@ make clean-safe      # reclaim caches that regenerate silently
 make install-guard   # launchd watchdog: checks every 2h, notifies on WARN/CRIT
 ```
 
+## Make targets
+
+`make help` lists these at any time.
+
+| Target | Does |
+|---|---|
+| `make report` | Full read-only diagnostic, ending in a Verdict block |
+| `make brief` | Headline numbers only |
+| `make check` | Run the guard once — exit `0` ok / `1` warn / `2` crit |
+| `make dry` | Preview a tier 1+2 reclaim. Removes nothing |
+| `make clean-safe` | Reclaim tier 1 — caches that regenerate silently |
+| `make clean-more` | Reclaim tier 1+2 — adds re-downloadable caches |
+| `make review` | List tier-3 *data* candidates for manual decision |
+| `make docker` | Report Docker reclaimable space. Never touches volumes |
+| `make docker-clean` | Prune build cache + untagged images, then compact |
+| `make install-guard` | Install + load the launchd watchdog |
+| `make uninstall-guard` | Unload + remove it |
+| `make guard-status` | Is the guard loaded? |
+| `make log` | Tail the guard's health log |
+| `make lint` | Syntax-check every script and the plist |
+
+## The guard
+
+A launchd LaunchAgent labelled `com.sparklingclean.diskguard`. Checks every
+2 hours plus once at login.
+
+| What | Where |
+|---|---|
+| Installed plist (what launchd reads) | `~/Library/LaunchAgents/com.sparklingclean.diskguard.plist` |
+| Script it runs | `bin/disk-guard.zsh` |
+| Shared check logic | `bin/lib/common.zsh` → `sc_run_health_checks` |
+| Plist template (in git) | `launchd/com.sparklingclean.diskguard.plist` |
+| Health log | `~/.local/state/sparkling-clean/sparkling-clean.log` |
+| Notification state | `~/.local/state/sparkling-clean/guard.state` |
+| launchd stdout / stderr | `.guard.out.log` / `.guard.err.log` (gitignored) |
+
+The template carries a `__SC_ROOT__` placeholder that `make install-guard`
+substitutes with this repo's absolute path, so the installed plist is generated
+rather than hand-edited.
+
+**Editing the scripts takes effect immediately.** The plist runs
+`bin/disk-guard.zsh` in place, not a copy, so the next scheduled run picks up
+your changes. Re-run `make install-guard` only if you *move the repo* or change
+the plist itself.
+
+Force a run instead of waiting:
+
+```bash
+launchctl kickstart -k gui/$(id -u)/com.sparklingclean.diskguard
+```
+
+launchd rather than cron: it runs a missed interval on wake, so a sleeping laptop
+still gets checked, and it runs inside the GUI session that notifications need.
+
+### When it speaks
+
+It **checks** every 2 hours; it **notifies** only on a level change, or once per
+12 hours (`SC_RENOTIFY_H`) while a condition persists. Never on OK.
+
+**A silent notification tray is the healthy steady state** — use `make log` to
+confirm it is alive.
+
+Signals come in two tiers:
+
+| Tier | Contents | Escalates | Notifies |
+|---|---|---|---|
+| **CHECK** | disk %, Time Machine on/off, backup age, snapshot count | yes | yes |
+| **NOTE** | jetsam / panic history | no | no |
+
+Jetsam reports are evidence something *already happened*. Treating them as an
+escalating signal keeps the guard at WARN for days after you fix the cause —
+exactly when a monitor most needs to go quiet. If the cause is still live, disk %
+or backup age catches it as a *current* condition.
+
+Each check owns its own verdict and wording; the overall level is the worst
+check, and the notification names **that** subsystem — `Backup CRIT: 61 days
+stale`, not `Disk CRIT` on a machine with 121 GB free.
+
+```
+== Verdict ==
+  OK    Disk       22% free
+  OK    Backups    enabled
+  OK    Backup     0d ago
+  OK    Snapshots  2
+  note  2 jetsam/panic report(s) in the last 3 days (past events, not a current fault)
+
+OK    healthy
+```
+
+Thresholds, overridable by env: `SC_WARN_PCT` (15), `SC_CRIT_PCT` (10),
+`SC_TM_WARN_D` (2), `SC_TM_CRIT_D` (7), `SC_RENOTIFY_H` (12).
+
 ## What is here
 
 | Path | Purpose |
 |---|---|
-| `bin/disk-report.zsh` | Read-only diagnostic: space, snapshots, memory, jetsam events, SMART, offenders |
+| `bin/disk-report.zsh` | Read-only diagnostic: space, snapshots, memory, jetsam events, SMART, offenders, TM exclusions, Verdict |
 | `bin/reclaim.zsh` | Tiered reclamation, **dry-run by default** |
 | `bin/docker-reclaim.zsh` | Docker space, **never touches volumes** |
 | `bin/disk-guard.zsh` | Threshold watchdog; exit 0/1/2, desktop notification |
-| `bin/lib/common.zsh` | Shared helpers — the APFS/snapshot/sparse-file knowledge lives here |
-| `launchd/` | LaunchAgent for the guard |
+| `bin/lib/common.zsh` | Shared helpers — the APFS/snapshot/sparse-file knowledge and the health model live here |
+| `launchd/` | LaunchAgent template for the guard |
 | `docs/GUIDE.md` | **The comprehensive guide.** Why the tools mislead, how to read the evidence, what to clean in what order |
 | `docs/REFERENCE.md` | Copy-paste command cheat sheet |
 | `docs/POSTMORTEM.md` | The incident, and which lesson became which line of code |
@@ -79,6 +171,9 @@ of Docker's footprint anyway; build cache and untagged images are where the spac
   leave the machine unbacked-up
 - No `err_return` — diagnostic tools exit non-zero on benign conditions
   (`smartctl` returns 4 on Apple's harmless GetLogPage artifact)
+- History never escalates current state, so a fixed problem stops alarming
+- The report and the guard share one `sc_run_health_checks`, so they cannot
+  disagree about whether the machine is healthy
 
 ## Requirements
 
