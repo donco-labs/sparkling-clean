@@ -220,7 +220,7 @@ make docker-clean   # prune + compact
 
 **Never run `docker volume prune`.** A named volume shows as "dangling" the
 moment its container is removed — but it still holds the data. Prune cannot
-distinguish `ambit_postgres-data` from scratch space, and volumes are typically
+distinguish `myapp_postgres-data` from scratch space, and volumes are typically
 a single-digit share of Docker's footprint anyway. `docker-reclaim.zsh` reports
 unreferenced volumes, flags which have human-given names, and deletes none.
 

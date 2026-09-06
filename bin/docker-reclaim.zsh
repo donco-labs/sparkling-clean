@@ -74,7 +74,7 @@ fi
 # ================================================================ VOLUMES ====
 # DO NOT PRUNE. A named volume shows as "dangling" the moment its container is
 # removed — but it still holds the data. `docker volume prune` cannot tell
-# ambit_postgres-data from scratch space, and it is usually a small win anyway
+# myapp_postgres-data from scratch space, and it is usually a small win anyway
 # (single-digit % of Docker's footprint). Report, never delete.
 sc_hdr "Volumes — REPORTED ONLY, never pruned"
 local -a dvols
