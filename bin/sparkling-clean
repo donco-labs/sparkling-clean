@@ -48,8 +48,15 @@ case $cmd in
   install-guard)
     local plist=$HOME/Library/LaunchAgents/com.sparklingclean.diskguard.plist
     mkdir -p ${plist:h}
-    sed "s|__SC_ROOT__|${here:h}|g" $here/../launchd/com.sparklingclean.diskguard.plist 2>/dev/null \
-      > $plist || { print -ru2 -- "template not found"; exit 1 }
+    # Checkout layout puts launchd/ beside bin/; Homebrew installs it inside
+    # libexec alongside the scripts. Look in both.
+    local tmpl
+    for tmpl in $here/launchd/com.sparklingclean.diskguard.plist \
+                $here/../launchd/com.sparklingclean.diskguard.plist; do
+      [[ -r $tmpl ]] && break
+    done
+    [[ -r $tmpl ]] || { print -ru2 -- "plist template not found"; exit 1 }
+    sed "s|__SC_ROOT__|${here:h}|g" $tmpl > $plist
     launchctl unload $plist 2>/dev/null
     launchctl load  $plist && print -r -- "loaded — checks every 2h, notifies on WARN/CRIT" ;;
   uninstall-guard)
