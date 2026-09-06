@@ -184,11 +184,33 @@ typeset -ga SC_TM_EXCLUDE_CANDIDATES=(
   ~/.sdkman
   ~/.pub-cache
   ~/fvm
+  ~/go/pkg
+  ~/Library/pnpm
+  ~/.vscode/extensions
+  ~/.cargo/registry
+  ~/.m2/repository
 )
 
 # tmutil isexcluded prints "[Excluded]  /path" or "[Included]  /path".
 # Works unprivileged, so this is safe from a LaunchAgent.
 sc_tm_excluded() { tmutil isexcluded "$1" 2>/dev/null | grep -q '^\[Excluded\]' }
+
+# On a network destination the FILE COUNT dominates, not the byte count: every
+# file is a separate round-trip, on the way in and again when the backup is
+# thinned. Measured on the source host: ~/.ollama is 6.6 GB in 29 files (cheap,
+# big sequential blobs) while ~/.pub-cache is 1.2 GB in 61,296 files -- five
+# times smaller, roughly two thousand times more round-trips. Filtering on size
+# alone made ~/.cargo (233 MB, 15,705 files) and ~/Library/pnpm (440 MB, 22,685)
+# invisible.
+: ${SC_TM_MIN_BYTES:=500000000}
+: ${SC_TM_MIN_FILES:=10000}
+
+sc_file_count() { [[ -e $1 ]] && find "$1" 2>/dev/null | wc -l | tr -d ' ' || print -r -- 0 }
+
+# Flag on EITHER axis.
+sc_tm_worth_excluding() {  # $1 path, $2 bytes, $3 files
+  (( $2 >= SC_TM_MIN_BYTES || $3 >= SC_TM_MIN_FILES ))
+}
 
 # ------------------------------------------------------------ health model --
 # Each check yields its OWN verdict. Nothing mutates a shared level, and no

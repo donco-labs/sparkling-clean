@@ -72,30 +72,30 @@ fi
 
 # ================================================ TM EXCLUSION HYGIENE ======
 sc_hdr "Time Machine exclusions"
-local -a unexcluded
-local unex_total=0 cand sz
+local -a unexcluded unex_rows
+local unex_total=0 unex_files=0 cand sz fc
 for cand in $SC_TM_EXCLUDE_CANDIDATES; do
   [[ -e $cand ]] || continue
   sc_tm_excluded $cand && continue
-  sz=$(sc_size_of $cand)
-  (( sz < 500000000 )) && continue          # ignore anything under 500 MB
+  sz=$(sc_size_of $cand); fc=$(sc_file_count $cand)
+  sc_tm_worth_excluding $cand $sz $fc || continue
   unexcluded+=("$cand")
-  (( unex_total += sz ))
+  # Rows are built here so size and file count are computed exactly once per
+  # path -- find(1) over ~100k-entry trees is the expensive part of this report.
+  unex_rows+=("${fc}"$'\t'"$(sc_human $sz)"$'\t'"${fc}"$'\t'"${cand/#$HOME/~}")
+  (( unex_total += sz )); (( unex_files += fc ))
 done
 
 if (( ${#unexcluded} == 0 )); then
-  sc_ok "no large rebuildable directories are being backed up"
+  sc_ok "no large or file-dense rebuildable directories are being backed up"
 else
-  sc_warn "$(sc_human $unex_total) of rebuildable data is in every backup:"
-  # Biggest first — that is the order you want to act in.
-  { for cand in $unexcluded; do
-      printf '%d\t%s\t%s\n' $(sc_size_of $cand) "$(sc_human $(sc_size_of $cand))" "${cand/#$HOME/~}"
-    done
-  } | sort -rn -k1 | awk -F'\t' '{printf "        %10s  %s\n", $2, $3}'
+  sc_warn "$(sc_human $unex_total) / ${unex_files} files of rebuildable data in every backup:"
+  # Sorted by FILE COUNT: on a network destination that is the real cost, both
+  # when copying and again when the backup is later thinned file-by-file.
+  print -rl -- $unex_rows | sort -rn -k1 \
+    | awk -F'\t' '{printf "        %10s  %9s files  %s\n", $2, $3, $4}'
   sc_info "All are reconstructible from a registry, lockfile or re-download."
   sc_info "Review, then exclude (-p survives the folder being recreated):"
-  # Quote each path individually; joining a (q)-quoted array escapes the
-  # separators too and collapses everything into one argument.
   local cmdline=""
   for cand in $unexcluded; do cmdline+=" ${(q)cand}" ; done
   print -r -- ""

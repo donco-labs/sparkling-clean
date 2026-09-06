@@ -361,6 +361,31 @@ not waiting on the network, but grinding sparsebundle band files over SMB.
 `Docker.raw` is the standout — a single 22 GB sparse image rewritten on every
 container run, so every *incremental* re-copies large chunks of it.
 
+### File count, not byte count
+
+On a network destination the **file count** is what costs. Every file is a
+separate round-trip going in — and again later, one `unlink` at a time, when the
+backup is thinned. Measured on the source host:
+
+| Path | Size | Files |
+|---|---|---|
+| `~/.ollama` | 6.6 GB | **29** |
+| `~/Library/Containers/com.docker.docker` | 24.1 GB | **148** |
+| `~/.pub-cache` | 1.2 GB | **61,296** |
+| `~/.cache` | 8.8 GB | **107,760** |
+
+`~/.ollama` is five times larger than `~/.pub-cache` and roughly two thousand
+times cheaper to back up. Filtering on size alone also hid `~/.cargo`
+(233 MB, 15,705 files) and `~/Library/pnpm` (440 MB, 22,685) completely.
+
+So the check flags on **either** axis — `SC_TM_MIN_BYTES` (500 MB) or
+`SC_TM_MIN_FILES` (10,000) — and sorts by file count.
+
+This showed up concretely during a post-backup thinning pass that sat in
+`ThinningPostBackup` for tens of minutes at 0.9% CPU, deleting
+`~/.cache/uv/archive-v0/...` entries one SMB round-trip at a time. Whatever you
+back up, you eventually pay to delete.
+
 `make report` lists what qualifies and emits a ready-to-paste command:
 
 ```bash
