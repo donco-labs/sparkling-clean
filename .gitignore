@@ -1,0 +1,6 @@
+# guard stdout/stderr from launchd
+.guard.out.log
+.guard.err.log
+*.log
+
+.DS_Store
