@@ -90,8 +90,9 @@ if (( json )); then
   for c in $SC_CHECKS; do
     (( first )) || printf ','
     first=0
-    printf '{"level":"%s","name":"%s","headline":"%s"}' \
-      "$(sc_check_level $c)" "$(sc_check_name $c)" "$(sc_check_headline $c)"
+    printf '{"level":"%s","name":"%s","headline":"%s","detail":"%s"}' \
+      "$(sc_check_level $c)" "$(sc_check_name $c)" "$(sc_check_headline $c)" \
+      "$(sc_check_detail $c | sed 's/"/\\"/g')"
   done
   printf '],"notes":['
   first=1

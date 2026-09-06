@@ -28,8 +28,8 @@ setopt no_err_return
 local SC=""
 for candidate in \
   "${0:A:h:h:h}/bin/disk-guard.zsh" \
-  "/opt/homebrew/opt/sparkling-clean/libexec/disk-guard.zsh" \
-  "/usr/local/opt/sparkling-clean/libexec/disk-guard.zsh"
+  "/opt/homebrew/opt/sparkling-clean/libexec/bin/disk-guard.zsh" \
+  "/usr/local/opt/sparkling-clean/libexec/bin/disk-guard.zsh"
 do
   [[ -x $candidate || -r $candidate ]] && { SC=$candidate; break }
 done
@@ -52,7 +52,11 @@ if [[ -z $json ]]; then
 fi
 
 # Minimal field extraction — no jq, to keep the zero-dependency promise.
-jget() { print -r -- "$json" | sed -E "s/.*\"$1\":\"([^\"]*)\".*/\1/" }
+# Restricted to the object prefix BEFORE "checks": the keys level/headline also
+# appear inside every check, and sed's greedy .* would otherwise return the LAST
+# match — pairing the worst check's subject with a different check's headline.
+local head=${json%%,\"checks\":*}
+jget() { print -r -- "$head" | sed -E "s/.*\"$1\":\"([^\"]*)\".*/\1/" }
 
 local level=$(jget level)
 local subject=$(jget subject)
@@ -69,16 +73,19 @@ print -r -- "---"
 # One line per check, colour-coded, worst first is not needed — order is stable
 # and matches the report.
 print -r -- "$json" \
-  | grep -oE '\{"level":"[A-Z]+","name":"[^"]+","headline":"[^"]+"\}' \
+  | grep -oE '\{"level":"[A-Z]+","name":"[^"]+","headline":"[^"]+","detail":"[^"]*"\}' \
   | while read -r row; do
       local l=$(print -r -- "$row" | sed -E 's/.*"level":"([^"]*)".*/\1/')
       local n=$(print -r -- "$row" | sed -E 's/.*"name":"([^"]*)".*/\1/')
       local h=$(print -r -- "$row" | sed -E 's/.*"headline":"([^"]*)".*/\1/')
+      local d=$(print -r -- "$row" | sed -E 's/.*"detail":"([^"]*)".*/\1/')
       case $l in
         (CRIT) print -r -- "✗ ${n}: ${h} | color=red"    ;;
         (WARN) print -r -- "△ ${n}: ${h} | color=orange" ;;
         (*)    print -r -- "✓ ${n}: ${h}"                ;;
       esac
+      # Explanation goes here, where there is room for it — never in the title.
+      [[ $l != OK && -n $d && $d != "$h" ]] && print -r -- "   ${d} | size=11 color=gray"
     done
 
 # Notes are context, never alarming — dimmed, matching the CHECK/NOTE split.

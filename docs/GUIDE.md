@@ -468,7 +468,7 @@ notification names *that* subsystem:
 ```
 Backup CRIT: 61 days stale
 Disk CRIT: 8% free
-Snapshots WARN: 7 pinning space
+Snapshots WARN: 7
 ```
 
 The original design hardcoded `"Disk ${level}"` into every title and built the

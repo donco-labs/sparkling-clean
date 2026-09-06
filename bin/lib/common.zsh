@@ -327,27 +327,30 @@ sc_run_health_checks() {
   if sc_tm_enabled; then
     sc_check OK Backups "enabled"
   else
-    sc_check CRIT Backups "auto-backup OFF" "Time Machine automatic backups are OFF — nothing is being backed up."
+    sc_check CRIT Backups "off" "Time Machine automatic backups are switched off — nothing is being backed up."
   fi
 
   # -- backup chain actually completing ----------------------------------
   local d
   if d=$(sc_tm_days_since_backup); then
     if   (( d >= SC_TM_CRIT_D )); then
-      sc_check CRIT Backup "${d} days stale" "No completed backup in ${d} days (last: $(sc_tm_last_backup_human))."
+      sc_check CRIT Backup "${d} days" "No completed backup in ${d} days. The last one finished $(sc_tm_last_backup_human)."
     elif (( d >= SC_TM_WARN_D )); then
-      sc_check WARN Backup "${d} days stale" "Last completed backup ${d} days ago."
+      sc_check WARN Backup "${d} days" "Last completed backup was ${d} days ago."
     else
       sc_check OK Backup "${d}d ago" "Last completed backup $(sc_tm_last_backup_human)."
     fi
   else
-    sc_check WARN Backup "age unknown" "Could not determine last backup age from Time Machine preferences."
+    sc_check WARN Backup "age unknown" "Could not read the last backup date from Time Machine preferences, so this is unverified rather than healthy."
   fi
 
-  # -- snapshots pinning space -------------------------------------------
+  # -- snapshots holding space -------------------------------------------
+  # Headline stays a bare count: it is rendered as "Snapshots: 5" in the menu
+  # bar, where every character costs. "Pinning" was also invented jargon.
   local n=$(sc_snapshot_count)
   if (( n >= 5 )); then
-    sc_check WARN Snapshots "${n} pinning space" "${n} local snapshots are holding deleted blocks. Thin them."
+    sc_check WARN Snapshots "${n}" \
+      "${n} local snapshots are still holding space from files you deleted. Until they are thinned, deleting more will not free anything."
   else
     sc_check OK Snapshots "${n}"
   fi

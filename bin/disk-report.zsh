@@ -35,7 +35,7 @@ local snaps=$(sc_snapshot_count)
 if (( snaps == 0 )); then
   sc_ok "none — deleted files return space immediately"
 else
-  sc_warn "$snaps local snapshot(s) pinning deleted blocks:"
+  sc_warn "$snaps local snapshot(s) holding space from deleted files:"
   sc_snapshot_list | sed 's/^/        /'
   sc_info "reclaim.zsh thins these automatically; or: sudo tmutil thinlocalsnapshots / 999999999999 4"
 fi
