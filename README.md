@@ -12,8 +12,18 @@ thrash and jetsam kills. Full writeup: [docs/POSTMORTEM.md](docs/POSTMORTEM.md).
 
 ```bash
 brew tap donco-labs/tap
+brew trust --formula donco-labs/tap/sparkling-clean
 brew install sparkling-clean
 ```
+
+Homebrew 6.0 refuses to load formulae from third-party taps until you trust them
+— a formula is arbitrary Ruby that runs on install, so this gate is doing its
+job. `--formula` trusts only this one; `brew trust donco-labs/tap` would trust
+every formula the tap ever gains. Trust is recorded in
+`~/.homebrew/trust.json` (or `$XDG_CONFIG_HOME/homebrew/trust.json`).
+
+The formula is [Formula/sparkling-clean.rb](https://github.com/donco-labs/homebrew-tap/blob/main/Formula/sparkling-clean.rb)
+— worth a read before you trust it, as with any tap.
 
 Or clone and use `make` directly — the repo works without installing.
 
