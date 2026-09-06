@@ -395,6 +395,36 @@ The guard *checks* every 2 hours but *notifies* only on a level change, or once
 per `SC_RENOTIFY_H` (12) hours while a condition persists. Never on OK. A CRIT
 nag every two hours for something you already know about trains you to ignore it.
 
+### Checks vs notes
+
+Every signal is one of two kinds, and conflating them produces false alarms:
+
+| Tier | Meaning | Escalates? | Notifies? |
+|---|---|---|---|
+| **CHECK** | a current condition (disk %, backup age, snapshot count, TM on/off) | yes | yes |
+| **NOTE** | historical context (jetsam/panic reports in the last 3 days) | **no** | **no** |
+
+Jetsam reports are evidence that something *already happened*, not that anything
+is wrong now. Left as an escalating signal they hold the guard at WARN for three
+days after you fix the cause — precisely when a monitor most needs to go quiet.
+If the cause is still live, disk % or backup age catches it as a current
+condition, which is where it belongs.
+
+Each check produces its own verdict; nothing mutates a shared level and no check
+inherits another's wording. Overall level is the **worst** check, and the
+notification names *that* subsystem:
+
+```
+Backup CRIT: 61 days stale
+Disk CRIT: 8% free
+Snapshots WARN: 7 pinning space
+```
+
+The original design hardcoded `"Disk ${level}"` into every title and built the
+message body entirely from the disk branch, so a 61-day-stale backup chain
+announced itself as **"Disk CRIT: 22% free"** on a machine with 121 GB spare —
+naming the wrong subsystem and contradicting its own threshold.
+
 So a quiet notification tray is the expected steady state — `make log` is how you
 confirm it is alive:
 

@@ -190,6 +190,96 @@ typeset -ga SC_TM_EXCLUDE_CANDIDATES=(
 # Works unprivileged, so this is safe from a LaunchAgent.
 sc_tm_excluded() { tmutil isexcluded "$1" 2>/dev/null | grep -q '^\[Excluded\]' }
 
+# ------------------------------------------------------------ health model --
+# Each check yields its OWN verdict. Nothing mutates a shared level, and no
+# check inherits another's prose -- the original design had every alert titled
+# "Disk" and phrased in disk language, so a 61-day-stale backup chain announced
+# itself as "Disk CRIT: 22% free" on a machine with 121 GB spare.
+#
+# Two tiers, deliberately distinct:
+#   CHECKS  current conditions. Escalate, notify, set the exit code.
+#   NOTES   historical context. Never escalate, never notify.
+#
+# Jetsam/panic reports live in NOTES on purpose. They are evidence that
+# something already happened, not that anything is wrong now -- so after you fix
+# the cause they would otherwise hold the guard at WARN for days, which is
+# exactly when a monitor most needs to go quiet. If the cause is still live,
+# disk% or backup age catches it as a current condition.
+
+typeset -ga SC_CHECKS=()   # level \t name \t headline \t detail
+typeset -ga SC_NOTES=()
+
+sc_check() { SC_CHECKS+=("${1}"$'\t'"${2}"$'\t'"${3}"$'\t'"${4:-$3}") }
+sc_note()  { SC_NOTES+=("$1") }
+
+sc_level_rank() { case $1 in (CRIT) print -r -- 2 ;; (WARN) print -r -- 1 ;; (*) print -r -- 0 ;; esac }
+
+# Worst check wins. Returns the whole record so callers can name the subsystem.
+sc_worst_check() {
+  local c best=0 r winner=""
+  for c in $SC_CHECKS; do
+    r=$(sc_level_rank ${c%%$'\t'*})
+    (( r > best )) && { best=$r; winner=$c }
+  done
+  print -r -- $winner
+}
+
+sc_overall_level() {
+  local w=$(sc_worst_check)
+  [[ -n $w ]] && print -r -- ${w%%$'\t'*} || print -r -- OK
+}
+
+# Populates SC_CHECKS / SC_NOTES. Single source of truth: the report and the
+# guard must never disagree about whether this machine is healthy.
+sc_run_health_checks() {
+  SC_CHECKS=(); SC_NOTES=()
+
+  # -- disk --------------------------------------------------------------
+  local free=$(sc_free_bytes) pct=$(sc_pct_free)
+  if   (( pct < SC_CRIT_PCT )); then
+    sc_check CRIT Disk "${pct}% free" \
+      "Only $(sc_human $free) free (${pct}%). Swap cannot grow — expect freezes and app kills."
+  elif (( pct < SC_WARN_PCT )); then
+    sc_check WARN Disk "${pct}% free" "$(sc_human $free) free (${pct}%). Reclaim before it bites."
+  else
+    sc_check OK   Disk "${pct}% free" "$(sc_human $free) free (${pct}%)."
+  fi
+
+  # -- backups on at all -------------------------------------------------
+  if sc_tm_enabled; then
+    sc_check OK Backups "enabled"
+  else
+    sc_check CRIT Backups "auto-backup OFF" "Time Machine automatic backups are OFF — nothing is being backed up."
+  fi
+
+  # -- backup chain actually completing ----------------------------------
+  local d
+  if d=$(sc_tm_days_since_backup); then
+    if   (( d >= SC_TM_CRIT_D )); then
+      sc_check CRIT Backup "${d} days stale" "No completed backup in ${d} days (last: $(sc_tm_last_backup_human))."
+    elif (( d >= SC_TM_WARN_D )); then
+      sc_check WARN Backup "${d} days stale" "Last completed backup ${d} days ago."
+    else
+      sc_check OK Backup "${d}d ago" "Last completed backup $(sc_tm_last_backup_human)."
+    fi
+  else
+    sc_check WARN Backup "age unknown" "Could not determine last backup age from Time Machine preferences."
+  fi
+
+  # -- snapshots pinning space -------------------------------------------
+  local n=$(sc_snapshot_count)
+  if (( n >= 5 )); then
+    sc_check WARN Snapshots "${n} pinning space" "${n} local snapshots are holding deleted blocks. Thin them."
+  else
+    sc_check OK Snapshots "${n}"
+  fi
+
+  # -- historical context, never escalates -------------------------------
+  local recent=$(find /Library/Logs/DiagnosticReports -maxdepth 1 -mtime -3 2>/dev/null \
+                 | grep -Eic 'jetsam|panic|watchdog' | tr -d ' ')
+  (( recent > 0 )) && sc_note "${recent} jetsam/panic report(s) in the last 3 days (past events, not a current fault)"
+}
+
 # --------------------------------------------------------------- execution --
 # Every destructive helper routes through here. SC_APPLY=0 (the default) prints
 # what would happen and touches nothing.

@@ -28,54 +28,32 @@ done
 local STATE=$SC_STATE_DIR/guard.state
 mkdir -p $SC_STATE_DIR
 
-local free=$(sc_free_bytes) pct=$(sc_pct_free)
-local level=OK rc=0 msg=""
+sc_run_health_checks
 
-if   (( pct < SC_CRIT_PCT )); then
-  level=CRIT; rc=2
-  msg="Only $(sc_human $free) free (${pct}%). Swap cannot grow — expect freezes and app kills."
-elif (( pct < SC_WARN_PCT )); then
-  level=WARN; rc=1
-  msg="$(sc_human $free) free (${pct}%). Reclaim before it bites."
-else
-  msg="$(sc_human $free) free (${pct}%)."
-fi
+local level=$(sc_overall_level) rc=0
+case $level in (CRIT) rc=2 ;; (WARN) rc=1 ;; esac
 
-# ---- secondary signals: these turn an OK into a WARN ------------------------
-local -a notes
+# Name the subsystem that is actually unhealthy, not whichever one happens to be
+# checked first. "Backup CRIT: 61 days" beats "Disk CRIT: 22% free" on a machine
+# with 121 GB spare.
+local worst=$(sc_worst_check)
+local subject=$(print -r -- $worst | cut -f2)
+local headline=$(print -r -- $worst | cut -f3)
 
-# Snapshots hoarding deleted blocks.
-local snaps=$(sc_snapshot_count)
-(( snaps >= 5 )) && notes+=("$snaps local snapshots pinning space")
-
-# Backups silently left off — usually because a past cleanup paused them.
-sc_tm_enabled || notes+=("Time Machine auto-backup is OFF")
-
-# Enabled but not completing. This is the failure that hides for months: a full
-# disk purges TM's reference snapshot, every backup then fails, nothing is
-# surfaced. A running backup is not an excuse — only a COMPLETED one counts.
-local tm_days
-if tm_days=$(sc_tm_days_since_backup); then
-  if (( tm_days >= SC_TM_CRIT_D )); then
-    notes+=("no completed backup in ${tm_days} days")
-    level=CRIT; rc=2
-  elif (( tm_days >= SC_TM_WARN_D )); then
-    notes+=("last backup ${tm_days}d ago")
-  fi
-else
-  notes+=("backup age UNKNOWN")
-fi
-
-# The kernel's own distress signals in the last 3 days.
-local recent=$(find /Library/Logs/DiagnosticReports -maxdepth 1 -mtime -3 2>/dev/null \
-               | grep -Eic 'jetsam|panic|watchdog' | tr -d ' ')
-(( recent > 0 )) && notes+=("$recent jetsam/panic report(s) in 3 days")
-
-if (( ${#notes} )) && [[ $level == OK ]]; then level=WARN; rc=1; fi   # never demotes CRIT
-(( ${#notes} )) && msg="$msg ${(j:; :)notes}."
+# Body: only the checks that are not OK, then history as context.
+local -a lines
+local c lvl
+for c in $SC_CHECKS; do
+  lvl=${c%%$'\t'*}
+  [[ $lvl == OK ]] && continue
+  lines+=("$(print -r -- $c | cut -f4)")
+done
+local msg="${(j: :)lines}"
+[[ -z $msg ]] && msg="$(print -r -- $worst | cut -f4)"
+(( ${#SC_NOTES} )) && msg="$msg  [${(j:; :)SC_NOTES}]"
 
 # ---- log always -------------------------------------------------------------
-sc_log "guard $level pct=$pct free=$free snaps=$snaps notes=${(j:,:)notes}"
+sc_log "guard $level subject=$subject headline=\"$headline\" notes=${(j:,:)SC_NOTES}"
 
 # ---- de-dup: renotify only on escalation, or once per SC_RENOTIFY_H hours ---
 # State holds TWO independent facts, and conflating them is a bug: the last level
@@ -102,13 +80,18 @@ printf '%s\t%s\n' $level $notify_ts > $STATE
 
 # ---- output -----------------------------------------------------------------
 case $level in
-  CRIT) sc_crit "$msg" ;;
-  WARN) sc_warn "$msg" ;;
-  OK)   sc_ok   "$msg" ;;
+  (CRIT) sc_crit "${subject}: ${headline}" ;;
+  (WARN) sc_warn "${subject}: ${headline}" ;;
+  (OK)   sc_ok   "all checks pass" ;;
 esac
+for c in $SC_CHECKS; do
+  [[ ${c%%$'\t'*} == OK ]] && continue
+  sc_info "$(print -r -- $c | cut -f4)"
+done
+for n in $SC_NOTES; do sc_dim "      note: $n"; done
 
 if (( should_notify && ! quiet )); then
-  local title="Disk ${level}: ${pct}% free"
+  local title="${subject} ${level}: ${headline}"
   if (( $+commands[terminal-notifier] )); then
     terminal-notifier -title "$title" -message "$msg" -group sparkling-clean 2>/dev/null
   else

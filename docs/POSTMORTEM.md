@@ -131,6 +131,18 @@ side by side.
    emitting a ready-to-paste `tmutil addexclusion -p` command. Report-only by
    design; it is a one-time fix, not something to notify about hourly.
 
-9. **Threshold alerting beats forensics.** Every signal — jetsam events, disk-write
+9. **A monitor must distinguish current state from history.** The first guard
+   treated jetsam reports as an escalating signal, so after the disk was fixed it
+   kept reporting WARN for three days over kills that had already stopped. It
+   also hardcoded `"Disk ${level}"` into every notification title and built the
+   body from the disk branch alone — so the stale-backup CRIT rendered as
+   **"Disk CRIT: 22% free"** on a machine with 121 GB free, naming the wrong
+   subsystem and contradicting its own thresholds.
+
+   → Two tiers. CHECKS are current conditions and escalate; NOTES are historical
+   context and never do. Each check owns its verdict and its wording, the overall
+   level is the worst check, and the notification names that subsystem.
+
+10. **Threshold alerting beats forensics.** Every signal — jetsam events, disk-write
    diags, falling free space — was present for days beforehand. Nothing was
    watching. → `disk-guard.zsh` + launchd.

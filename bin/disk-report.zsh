@@ -195,3 +195,28 @@ for m in ~/Library/CloudStorage/*(N/); do
 done
 
 print
+
+# =============================================================== VERDICT =====
+# Same sc_run_health_checks the guard uses, so the report and the notification
+# can never disagree about whether this machine is healthy.
+sc_hdr "Verdict"
+sc_run_health_checks
+local c lvl name headline
+for c in $SC_CHECKS; do
+  lvl=${c%%$'\t'*}
+  name=$(print -r -- $c | cut -f2)
+  headline=$(print -r -- $c | cut -f3)
+  case $lvl in
+    (CRIT) printf '  %s  %-10s %s\n' "${SC_RED}CRIT${SC_RST}" $name "$headline" ;;
+    (WARN) printf '  %s  %-10s %s\n' "${SC_YEL}WARN${SC_RST}" $name "$headline" ;;
+    (*)    printf '  %s    %-10s %s\n' "${SC_GRN}OK${SC_RST}" $name "$headline" ;;
+  esac
+done
+for n in $SC_NOTES; do sc_dim "  note  $n"; done
+print
+case $(sc_overall_level) in
+  (CRIT) sc_crit "action needed" ;;
+  (WARN) sc_warn "attention soon" ;;
+  (*)    sc_ok   "healthy" ;;
+esac
+print
