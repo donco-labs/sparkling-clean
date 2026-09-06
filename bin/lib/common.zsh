@@ -212,6 +212,48 @@ sc_tm_worth_excluding() {  # $1 path, $2 bytes, $3 files
   (( $2 >= SC_TM_MIN_BYTES || $3 >= SC_TM_MIN_FILES ))
 }
 
+# ------------------------------------------------- kernel pressure events --
+# Two traps here, both hit in practice:
+#
+# 1. DiagnosticReports contains a hidden `.contents.panic` metadata file. A bare
+#    grep for "panic" counts it as a panic report, so the tally disagreed with
+#    the list it printed (8 vs 7). Dotfiles are excluded.
+#
+# 2. Not all JetsamEvents mean the same thing. "per-process-limit" is one process
+#    hitting its OWN ceiling -- routine, and not a sign of system trouble.
+#    "vm-pageshortage" / "vm-thrashing" / "vm-compressor-*" are actual memory
+#    exhaustion. Counting them together cries wolf over normal housekeeping.
+sc_pressure_files() {  # $1 = days
+  find /Library/Logs/DiagnosticReports -maxdepth 1 -mtime -${1:-3} \
+       \! -name '.*' 2>/dev/null | grep -Ei 'jetsam|panic|watchdog|disk writes'
+}
+
+# Set by sc_pressure_events when a JetsamEvent could not be read and therefore
+# could not be classified. Callers must surface this rather than treating an
+# unreadable file as "not a memory event" -- a check that silently reads healthy
+# when it cannot tell is worse than no check.
+typeset -g SC_PRESSURE_UNKNOWN=0
+
+sc_pressure_events() {  # $1 = days, $2 = "any" | "memory"
+  local days=${1:-3} kind=${2:-any} f n=0
+  if [[ $kind != memory ]]; then
+    sc_pressure_files $days | grep -c . | tr -d ' '
+    return
+  fi
+  SC_PRESSURE_UNKNOWN=0
+  for f in ${(f)"$(sc_pressure_files $days)"}; do
+    [[ $f == *JetsamEvent* ]] || continue
+    # These are group-readable (_analyticsusers) on macOS 26, so no sudo -- and
+    # deliberately NOT `sudo -n`, which fails whenever a password is required
+    # and would silently make every event look benign.
+    if ! grep -qE '"reason"' "$f" 2>/dev/null; then
+      (( SC_PRESSURE_UNKNOWN++ )); continue
+    fi
+    grep -qE '"reason" : "(vm-pageshortage|vm-thrashing|vm-compressor)' "$f" 2>/dev/null && (( n++ ))
+  done
+  print -r -- $n
+}
+
 # ------------------------------------------------------------ health model --
 # Each check yields its OWN verdict. Nothing mutates a shared level, and no
 # check inherits another's prose -- the original design had every alert titled
@@ -299,9 +341,14 @@ sc_run_health_checks() {
   fi
 
   # -- historical context, never escalates -------------------------------
-  local recent=$(find /Library/Logs/DiagnosticReports -maxdepth 1 -mtime -3 2>/dev/null \
-                 | grep -Eic 'jetsam|panic|watchdog' | tr -d ' ')
-  (( recent > 0 )) && sc_note "${recent} jetsam/panic report(s) in the last 3 days (past events, not a current fault)"
+  local n_mem=$(sc_pressure_events 3 memory) n_any=$(sc_pressure_events 3 any)
+  if (( n_mem > 0 )); then
+    sc_note "${n_mem} memory-exhaustion event(s) in the last 3 days (past events; if it recurs, look at RAM not disk)"
+  elif (( SC_PRESSURE_UNKNOWN > 0 )); then
+    sc_note "${SC_PRESSURE_UNKNOWN} jetsam event(s) in the last 3 days whose reason could not be read"
+  elif (( n_any > 0 )); then
+    sc_note "${n_any} kernel report(s) in the last 3 days — none from memory exhaustion (routine per-process limits)"
+  fi
 }
 
 # --------------------------------------------------------------- execution --

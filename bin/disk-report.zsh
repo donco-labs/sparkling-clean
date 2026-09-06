@@ -120,15 +120,15 @@ sc_dim "      straight to jetsam kills and pagein thrash."
 
 # =================================================== 5. PRESSURE EVENTS =====
 sc_hdr "Recent pressure events (last 14 days)"
-local hits=$(find /Library/Logs/DiagnosticReports -maxdepth 1 -mtime -14 2>/dev/null \
-             | grep -Ei 'jetsam|panic|watchdog|disk writes' | wc -l | tr -d ' ')
+local hits=$(sc_pressure_files 14 | grep -c . | tr -d ' ')
 if (( hits == 0 )); then
   sc_ok "no jetsam / panic / watchdog / excessive-disk-write reports"
 else
   sc_warn "$hits report(s):"
-  ls -lt /Library/Logs/DiagnosticReports/ 2>/dev/null \
-    | grep -Ei 'jetsam|panic|watchdog|disk writes' | head -8 \
-    | awk '{print "        " $6, $7, $8, $9, $10, $11}'
+  # Same source as the count above, so the tally and the list cannot disagree.
+  sc_pressure_files 14 | head -8 | while read -r f; do
+    printf '        %s  %s\n' "$(stat -f '%SB' -t '%b %e %H:%M' "$f")" "${f:t}"
+  done
 fi
 
 # ============================================================== 6. SMART ====
