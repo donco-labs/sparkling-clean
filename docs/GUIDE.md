@@ -396,6 +396,28 @@ sudo tmutil addexclusion -p <paths>
 deleted and recreated — which is exactly what caches do. Verify with
 `tmutil isexcluded <path>`; reverse with `sudo tmutil removeexclusion -p <path>`.
 
+### Thresholds surface; the list is policy
+
+`make report` uses size and file-count thresholds to decide what is worth your
+attention *right now*. Those thresholds are the wrong basis for policy. A
+freshly-emptied `DerivedData` is under threshold today and back to gigabytes next
+week — on the source host exactly that happened, and both Xcode directories
+silently stayed in every backup because they were empty at the moment the
+exclusion command was generated.
+
+So `bin/tm-exclude.zsh` applies to **every candidate that exists**, regardless of
+current size, and `make tm-status` shows applied vs pending:
+
+```bash
+make tm-status          # 16 applied · 4 pending · 1 absent (of 21)
+make tm-exclude         # dry run
+make tm-exclude-apply   # apply
+```
+
+This keeps the report advisory (it still never changes anything) while giving the
+policy a single, versioned, re-runnable home. `tmutil addexclusion` requires Full
+Disk Access, so run it from a terminal that has it.
+
 The candidate list (`SC_TM_EXCLUDE_CANDIDATES` in `lib/common.zsh`) deliberately
 contains only things reconstructible from a registry, a lockfile, or a
 re-download. Anything a person might have hand-curated — Documents, Downloads,

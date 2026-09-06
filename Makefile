@@ -37,6 +37,15 @@ docker: ## Report Docker reclaimable space (never touches volumes)
 docker-clean: ## Prune Docker build cache + untagged images, then compact
 	@./bin/docker-reclaim.zsh --apply --compact
 
+tm-status: ## Show which codified TM exclusions are applied
+	@./bin/tm-exclude.zsh --status || true   # exit 1 = pending, meaningful to scripts, not a make failure
+
+tm-exclude: ## Preview applying the codified TM exclusion list
+	@./bin/tm-exclude.zsh
+
+tm-exclude-apply: ## Apply the codified TM exclusion list (needs Full Disk Access)
+	@./bin/tm-exclude.zsh --apply
+
 install-guard: ## Install + load the launchd guard (checks every 2h)
 	@mkdir -p $(HOME)/Library/LaunchAgents
 	@sed 's|__SC_ROOT__|$(ROOT)|g' $(PLIST_SRC) > $(PLIST_DST)
@@ -60,4 +69,4 @@ lint: ## Syntax-check every script
 	@for f in bin/*.zsh bin/lib/*.zsh; do zsh -n $$f && echo "  ok  $$f"; done
 	@plutil -lint $(PLIST_SRC)
 
-.PHONY: help report brief check dry clean-safe clean-more review docker docker-clean install-guard uninstall-guard guard-status log lint
+.PHONY: help report brief check dry clean-safe clean-more review docker docker-clean tm-status tm-exclude tm-exclude-apply install-guard uninstall-guard guard-status log lint

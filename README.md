@@ -38,6 +38,9 @@ make install-guard   # launchd watchdog: checks every 2h, notifies on WARN/CRIT
 | `make review` | List tier-3 *data* candidates for manual decision |
 | `make docker` | Report Docker reclaimable space. Never touches volumes |
 | `make docker-clean` | Prune build cache + untagged images, then compact |
+| `make tm-status` | Which codified Time Machine exclusions are applied |
+| `make tm-exclude` | Preview applying the exclusion list |
+| `make tm-exclude-apply` | Apply it (needs Full Disk Access) |
 | `make install-guard` | Install + load the launchd watchdog |
 | `make uninstall-guard` | Unload + remove it |
 | `make guard-status` | Is the guard loaded? |
@@ -157,7 +160,14 @@ defaults read /Library/Preferences/com.apple.TimeMachine | sed -n '/SnapshotDate
 
 And a chain that *is* working can still be mostly garbage — `make report` flags
 large reconstructible directories (container images, package caches, toolchains)
-that are in every backup, and emits the `tmutil addexclusion` command to fix it.
+that are in every backup. The list is codified in `SC_TM_EXCLUDE_CANDIDATES`
+(`bin/lib/common.zsh`) and applied with one command, so a rebuilt machine gets
+the same policy:
+
+```bash
+make tm-status          # what is applied vs pending
+make tm-exclude-apply   # apply the whole list
+```
 
 **4. Never `docker volume prune`.** A named volume reads as "dangling" the moment
 its container is removed, but it still holds your data. Volumes are a small share
