@@ -1,0 +1,442 @@
+<title>The Ninety-Gigabyte Hour</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --paper:#fbfaf7; --paper-2:#f3f1ea; --ink:#16150f; --ink-2:#55524a; --ink-3:#8a867a;
+    --rule:#e2ded1; --rule-2:#efece2; --pencil:#b4462a; --pencil-soft:#f7e9e4;
+    color-scheme:light;
+    --f-surface-1:#fcfcfb; --f-ink:#0b0b0b; --f-ink-2:#52514e; --f-ink-3:#82817c;
+    --f-rule:#e3e2dd; --f-grid:#eeedea; --f-s1:#2a78d6; --f-s2:#eb6834;
+    --f-s3:#1baf7a; --f-s4:#eda100; --f-gray:#b9b8b2; --f-crit:#c0392b;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --paper:#14130e; --paper-2:#1c1b15; --ink:#f4f1e7; --ink-2:#b7b2a4; --ink-3:#807b6d;
+      --rule:#302e25; --rule-2:#24231b; --pencil:#e07a5c; --pencil-soft:#2b1d17;
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#14130e; --paper-2:#1c1b15; --ink:#f4f1e7; --ink-2:#b7b2a4; --ink-3:#807b6d;
+    --rule:#302e25; --rule-2:#24231b; --pencil:#e07a5c; --pencil-soft:#2b1d17;
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--paper);color:var(--ink);
+    font:400 19px/1.68 Newsreader,Georgia,"Times New Roman",serif;margin:0;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:672px;margin:0 auto;padding:0 28px 120px}
+  main{max-width:none}
+
+  /* ---------- masthead ---------- */
+  header{border-bottom:1px solid var(--rule);margin-bottom:52px;padding:56px 0 30px}
+  .status{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:28px}
+  .chip{font:500 12px/1 "IBM Plex Mono",ui-monospace,monospace;letter-spacing:.1em;
+    text-transform:uppercase;padding:7px 11px;border:1px solid var(--rule);color:var(--ink-3);border-radius:2px}
+  .chip.live{background:var(--pencil-soft);border-color:var(--pencil);color:var(--pencil)}
+  h1{font:700 clamp(38px,6vw,62px)/1.06 Fraunces,Georgia,serif;letter-spacing:-.022em;
+    margin:0 0 20px;text-wrap:balance;max-width:16em}
+  .standfirst{font:400 clamp(20px,2.4vw,25px)/1.46 Newsreader,Georgia,serif;color:var(--ink-2);
+    margin:0;max-width:32em;font-style:italic}
+  .review{margin-top:34px;padding:20px 24px;background:var(--paper-2);border-left:3px solid var(--pencil);
+    font-size:16.5px;line-height:1.6;color:var(--ink-2);border-radius:0 3px 3px 0}
+  .review strong{color:var(--ink)}
+
+  /* ---------- body ---------- */
+  main p{margin:0 0 1.35em}
+  main p.dek{display:none}
+  h2{font:600 clamp(25px,3.2vw,33px)/1.22 Fraunces,Georgia,serif;letter-spacing:-.015em;
+    margin:2.4em 0 .7em;text-wrap:balance}
+  h2::before{content:"";display:block;width:38px;height:2px;background:var(--pencil);margin-bottom:.55em}
+  h3{font:600 21px/1.3 Fraunces,Georgia,serif;margin:2em 0 .5em}
+  strong{font-weight:600}
+  a{color:var(--pencil);text-decoration-thickness:1px;text-underline-offset:2px}
+  code{font:400 .85em/1.4 "IBM Plex Mono",ui-monospace,monospace;background:var(--paper-2);
+    padding:.12em .34em;border-radius:2px}
+  hr{border:0;height:1px;background:var(--rule);margin:2.6em 0}
+  pre.term{background:var(--paper-2);border:1px solid var(--rule-2);border-radius:3px;
+    padding:20px 22px;overflow-x:auto;margin:0 0 1.6em}
+  pre.term code{background:none;padding:0;font-size:14.5px;line-height:1.62;color:var(--ink-2);white-space:pre}
+  aside.take{border-top:2px solid var(--pencil);border-bottom:1px solid var(--rule);
+    padding:20px 0 22px;margin:2em 0;font-size:18.5px;line-height:1.55;color:var(--ink)}
+  aside.take strong:first-child{color:var(--pencil)}
+  .tw{overflow-x:auto;margin:0 0 1.8em}
+  table{border-collapse:collapse;width:100%;font-size:16.5px}
+  th{text-align:left;font:500 12.5px/1.3 "IBM Plex Mono",monospace;letter-spacing:.07em;
+    text-transform:uppercase;color:var(--ink-3);padding:0 16px 9px 0;border-bottom:1px solid var(--rule)}
+  td{padding:11px 16px 11px 0;border-bottom:1px solid var(--rule-2);vertical-align:top;color:var(--ink-2)}
+  td:first-child{color:var(--ink)}
+
+  /* ---------- tipped-in plates ---------- */
+  .plate{margin:2.6em 0 2.8em;width:min(1124px,calc(100vw - 56px));
+    position:relative;left:50%;transform:translateX(-50%);overflow-x:auto;
+    border:1px solid var(--rule);border-radius:3px;background:var(--f-surface-1)}
+  .plate .fig{font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  .plate *{box-sizing:border-box}
+  .plate .fig{width:1400px;transform-origin:top left;background:var(--f-surface-1);padding:56px 64px;color:var(--f-ink)}
+  .plate .cap{font-size:15px;color:var(--f-ink-3);letter-spacing:.09em;text-transform:uppercase;font-weight:600;margin:0 0 10px}
+  h2{font-size:38px;line-height:1.15;margin:0 0 8px;letter-spacing:-.02em;font-weight:700}
+  .plate .sub{font-size:20px;color:var(--f-ink-2);margin:0 0 40px;max-width:78ch;line-height:1.45}
+  .plate .note{font-size:16px;color:var(--f-ink-3);margin-top:34px;line-height:1.5}
+
+  /* ---------- flow chain ---------- */
+  .plate .chain{display:flex;flex-direction:column;gap:0}
+  .plate .step{display:flex;align-items:flex-start;gap:24px;padding:20px 26px;border-radius:10px;background:#f4f3f0}
+  .plate .step.hot{background:#fdeeeb}
+  .plate .step .n{flex:0 0 38px;height:38px;border-radius:50%;background:var(--f-ink);color:#fff;
+           display:flex;align-items:center;justify-content:center;font-weight:700;font-size:17px}
+  .plate .step.hot .n{background:var(--f-crit)}
+  .plate .step .t{font-size:23px;font-weight:650;line-height:1.3}
+  .plate .step .d{font-size:17px;color:var(--f-ink-2);margin-top:5px;line-height:1.45}
+  .plate .arrow{height:26px;margin-left:45px;border-left:3px solid var(--f-rule)}
+  .plate .step.hot .t{color:var(--f-crit)}
+
+  /* ---------- bars ---------- */
+  .plate .bars{display:flex;flex-direction:column;gap:18px}
+  .plate .row{display:grid;grid-template-columns:210px 1fr 330px;align-items:center;gap:20px}
+  .plate .row .lbl{font-size:19px;color:var(--f-ink-2);text-align:right;font-variant-numeric:tabular-nums}
+  .plate .track{position:relative;height:44px;background:var(--f-grid);border-radius:4px}
+  .plate .bar{position:absolute;left:0;top:0;bottom:0;border-radius:0 4px 4px 0;
+       box-shadow:0 0 0 2px var(--f-surface-1)}
+  .plate .val{font-size:19px;font-weight:650;color:var(--f-ink);white-space:nowrap;font-variant-numeric:tabular-nums}
+  .plate .val small{font-weight:500;color:var(--f-ink-3);font-size:16px}
+
+  /* ---------- two-panel rank inversion ---------- */
+  .plate .panels{display:grid;grid-template-columns:1fr 1fr;gap:44px}
+  .plate .panel h3{font-size:20px;margin:0 0 4px;font-weight:700}
+  .plate .panel .ph{font-size:16px;color:var(--f-ink-3);margin:0 0 22px}
+  .plate .prow{display:grid;grid-template-columns:13px 152px 1fr 108px;align-items:center;gap:11px;margin-bottom:14px}
+  .plate .swatch{width:13px;height:13px;border-radius:3px}
+  .plate .pname{font-size:17px;color:var(--f-ink-2);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .plate .ptrack{position:relative;height:30px;background:var(--f-grid);border-radius:4px}
+  .plate .pbar{position:absolute;left:0;top:0;bottom:0;border-radius:0 4px 4px 0;box-shadow:0 0 0 2px var(--f-surface-1)}
+  .plate .pval{font-size:16px;font-weight:650;color:var(--f-ink);white-space:nowrap;
+        font-variant-numeric:tabular-nums;text-align:right}
+
+  /* ---------- timeline ---------- */
+  .plate .tl{position:relative;height:150px;margin:20px 0 8px}
+  .plate .axis{position:absolute;left:0;right:0;top:78px;height:3px;background:var(--f-rule)}
+  .plate .tick{position:absolute;top:60px;width:5px;height:38px;border-radius:3px;background:var(--f-s1)}
+  .plate .tick.late{background:var(--f-s3)}
+  .plate .gap{position:absolute;top:44px;height:70px;background:#fdeeeb;border-radius:8px;
+       border:2px dashed #eab5ac}
+  .plate .gaplab{position:absolute;top:0;width:100%;text-align:center;font-size:21px;font-weight:700;color:var(--f-crit)}
+  .plate .gapsub{position:absolute;top:29px;width:100%;text-align:center;font-size:16px;color:#a8503f}
+  .plate .tlab{position:absolute;top:124px;font-size:16px;color:var(--f-ink-3);transform:translateX(-50%);white-space:nowrap}
+
+  /* ---------- scoreboard ---------- */
+  .plate .score{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;background:var(--f-rule)}
+  .plate .cell{background:var(--f-surface-1);padding:30px 26px}
+  .plate .cell .k{font-size:16px;color:var(--f-ink-3);text-transform:uppercase;letter-spacing:.08em;font-weight:600}
+  .plate .cell .before{font-size:26px;color:var(--f-ink-3);margin-top:16px;text-decoration:line-through;
+                text-decoration-thickness:2px;font-variant-numeric:tabular-nums}
+  .plate .cell .after{font-size:44px;font-weight:700;margin-top:6px;letter-spacing:-.02em;
+               font-variant-numeric:tabular-nums;line-height:1.05}
+  .plate .cell.good .after{color:var(--f-s3)}
+  .plate .legend{display:flex;gap:26px;margin-bottom:26px;flex-wrap:wrap}
+  .plate .lgi{display:flex;align-items:center;gap:9px;font-size:17px;color:var(--f-ink-2)}
+  .plate .lgs{width:14px;height:14px;border-radius:3px}
+
+  footer{margin:80px 0 0;padding-top:26px;border-top:1px solid var(--rule);
+    font-size:16px;color:var(--ink-3)}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+  @media(max-width:760px){
+    body{font-size:18px}
+    .plate{width:calc(100vw - 32px)}
+    .wrap{padding:0 16px 80px}
+  }
+</style>
+
+<div class="wrap">
+<header>
+  <div class="status">
+    <span class="chip live">Draft · not published</span>
+    <span class="chip">2,508 words</span>
+    <span class="chip">5 figures</span>
+    <span class="chip">Target: Medium</span>
+  </div>
+  <h1>My Mac Was Reading 90 GB an Hour. The SSD Was Fine.</h1>
+  <p class="standfirst">A night of chasing a “failing disk” that turned out to be three separate
+    problems, one of which had silently killed my backups two months earlier.</p>
+  <div class="review">
+    <strong>Reviewing?</strong> Use the comment tool on any paragraph to leave a note — threads
+    are visible to everyone with this link. The figures below are live HTML, identical to the PNGs
+    that will be uploaded to Medium. Every number is drawn from the session record rather than
+    reconstructed; flag anything that reads as overstated and it gets checked against the logs again.
+  </div>
+</header>
+<main>
+<p class="dek">A night of chasing a "failing disk" that turned out to be three separate problems, one of which had silently killed my backups two months earlier.</p>
+<hr>
+<p>It started the way these things do: the machine would freeze, hard, for ten or twenty seconds at a stretch. Watchdog timeouts. Activity Monitor showing disk activity pinned near 1 GB/s with nothing obvious to explain it.</p>
+<p>A 24 GB M-series MacBook Air, 512 GB SSD, macOS 26. My first thought was the same as yours would be: the drive is dying.</p>
+<p>So I pulled SMART data.</p>
+<pre class="term"><code>SMART overall-health self-assessment test result: PASSED
+
+Critical Warning:                   0x00
+Available Spare:                    100%
+Percentage Used:                    0%
+Media and Data Integrity Errors:    0
+Error Information Log Entries:      0
+
+Read 1 entries from Error Information Log failed:
+GetLogPage failed: system=0x38, sub=0x0, code=745</code></pre>
+<p>That last line looked like the smoking gun. It is not.</p>
+<h2>The red herring</h2>
+<p><code>system=0x38</code> is IOKit. <code>code=745</code> is <code>kIOReturnDeviceError</code>. Alarming, and completely meaningless here.</p>
+<p>Apple Silicon Macs expose exactly one NVMe log page through their driver: <code>0x02</code>, the health page. <code>smartctl</code> also asks for page <code>0x01</code>, the Error Information Log, and the driver refuses. Every Apple Silicon Mac produces this line.</p>
+<p>The tell is two lines above it: <strong><code>Error Information Log Entries: 0</code></strong>. There is nothing to read. <code>smartctl</code> tries to read one entry anyway, gets refused, and reports a device error.</p>
+<p>It also makes <code>smartctl</code> exit with status 4 — which later killed the first version of my own diagnostic script, silently, at exactly the section written to explain the error away.</p>
+<aside class="take"><strong>Takeaway.</strong> On Apple Silicon, <code>GetLogPage failed … code=745</code> is a tool artifact, not a disk fault. Judge the drive by <code>Critical Warning</code>, <code>Available Spare</code>, <code>Percentage Used</code>, and <code>Media and Data Integrity Errors</code>. All four were perfect.</aside>
+<h2>What SMART actually told me</h2>
+<figure class="plate"><div class="fig">
+  <p class="cap">Figure 2 · What SMART actually said</p>
+  <h2>Reads ran at nearly three times writes</h2>
+  <p class="sub">Every health field on the drive was perfect. The lifetime counters were not —
+    and the ratio between them is the diagnosis.</p>
+  <div class="bars">
+    <div class="row"><div class="lbl">Data read</div>
+      <div class="track"><div class="bar" style="width:100%;background:var(--s1)"></div></div>
+      <div class="val">39.5 TB <small>· 90 GB/hour</small></div></div>
+    <div class="row"><div class="lbl">Data written</div>
+      <div class="track"><div class="bar" style="width:34.9%;background:var(--gray)"></div></div>
+      <div class="val">13.8 TB</div></div>
+  </div>
+  <p class="note">Across 438 powered-on hours. Heavy <em>writing</em> means a busy machine.
+    Heavy <em>reading</em> at three times your write volume means the same data being read over and
+    over — the signature of pagein thrash, not of a dying disk.</p></div></figure>
+<p>The health fields were clean. The lifetime counters were not normal.</p>
+<pre class="term"><code>Data Units Read:     77,217,786 [39.5 TB]
+Data Units Written:  27,033,148 [13.8 TB]
+Power On Hours:      438</code></pre>
+<p>39.5 TB read across 438 powered-on hours is <strong>90 GB per hour, sustained, for the life of the machine</strong>. No workload I run does that. And the read:write ratio is nearly 3:1.</p>
+<p>That ratio is the diagnosis. Heavy <em>writing</em> means a busy machine. Heavy <em>reading</em> at three times your write volume means the same data is being read over and over — the signature of <strong>pagein thrash</strong>. The disk was not failing. It was being flogged.</p>
+<p>Confirmed live:</p>
+<pre class="term"><code>Pageins:   1,043,671      (~16 GB — in a 16-minute uptime)
+Pageouts:      6,233
+PhysMem:   23G used, 259M unused
+vm.swapusage: total = 0.00M</code></pre>
+<h2>Three ways <code>df</code> lied to me</h2>
+<p>Before I could see how full the disk was, I had to get past the tooling.</p>
+<pre class="term"><code>Filesystem      Size    Used   Avail Capacity   Mounted on
+/dev/disk3s1s1  460Gi    12Gi    43Gi     22%   /
+/dev/disk3s5    460Gi   396Gi    43Gi     91%   /System/Volumes/Data</code></pre>
+<p><strong>One.</strong> Both rows show <code>460Gi</code> and <code>43Gi</code>. Not a coincidence and not a bug: APFS volumes share a single container. <code>Size</code> and <code>Avail</code> are container-wide and identical on every row. Only <code>Used</code> is per-volume. Never sum the rows.</p>
+<p><strong>Two.</strong> <code>df -h</code> reports GiB (1024³). <code>diskutil</code> and Finder report GB (1000³). The same 396 GiB shows as 425.5 GB. This is why <code>du</code> totals never reconcile with <code>df -h</code>.</p>
+<p><strong>Three.</strong> Finder counts "purgeable" space — snapshots and evictable caches — as free, because macOS <em>can</em> release it under pressure. <code>df</code> counts only genuinely free blocks. Finder will cheerfully claim 80 GB free while <code>df</code> says 20 GB, and under pressure reality behaves like <code>df</code>.</p>
+<aside class="take"><strong>Takeaway.</strong> One command tells the truth: ``<code> diskutil info /System/Volumes/Data | grep "Container Free" </code>``</aside>
+<p>It said 36.6 GB free. <strong>93% full.</strong></p>
+<h2>The chain nobody diagnoses correctly</h2>
+<figure class="plate"><div class="fig">
+  <p class="cap">Figure 1 · The failure chain</p>
+  <h2>A full disk becomes a frozen machine</h2>
+  <p class="sub">Nothing here is a hardware fault. Each step is ordinary behaviour; the damage is
+    in the sequence — and it only starts once free space runs out.</p>
+  <div class="chain">
+    <div class="step"><div class="n">1</div><div><div class="t">The disk passes ~90% full</div>
+      <div class="d">On this machine: 36.6 GB free of 494 GB.</div></div></div>
+    <div class="arrow"></div>
+    <div class="step hot"><div class="n">2</div><div><div class="t">macOS can no longer grow a swapfile</div>
+      <div class="d">Swap lives on the same volume. <code>vm.swapusage</code> reads
+        <strong>total = 0.00M</strong> — which looks healthy in isolation.</div></div></div>
+    <div class="arrow"></div>
+    <div class="step"><div class="n">3</div><div><div class="t">Memory pressure loses its relief valve</div>
+      <div class="d">23 GB of 24 GB in use, and nowhere to page out to.</div></div></div>
+    <div class="arrow"></div>
+    <div class="step"><div class="n">4</div><div><div class="t">The page cache evicts executables and mapped files</div>
+      <div class="d">They are needed again immediately, so they are read straight back from the SSD.</div></div></div>
+    <div class="arrow"></div>
+    <div class="step hot"><div class="n">5</div><div><div class="t">Sustained ~1 GB/s of reads — pagein thrash</div>
+      <div class="d">1,043,671 pageins against 6,233 pageouts, in a 16-minute uptime.</div></div></div>
+    <div class="arrow"></div>
+    <div class="step hot"><div class="n">6</div><div><div class="t">The kernel stalls on I/O — watchdog timeouts and app kills</div>
+      <div class="d">Which is where you notice, and where you start blaming the drive.</div></div></div>
+  </div>
+  <p class="note"><strong>Swap at zero is not a problem.</strong> Swap at zero <em>while RAM is
+    saturated and the disk is nearly full</em> is the failure.</p></div></figure>
+<p>Here is what actually produces "1 GB/s of disk reads and the machine locks up":</p>
+<pre class="term"><code>disk fills past ~90%
+      ↓
+macOS cannot grow a swapfile   (swap lives on that same volume)
+      ↓
+RAM pressure has no relief valve
+      ↓
+page cache evicts executables and mmapped files
+      ↓
+they are re-read from SSD immediately   ← the 1 GB/s
+      ↓
+kernel stalls on I/O → watchdog timeout → jetsam kills your apps</code></pre>
+<p>The subtle part is the swap reading. <code>vm.swapusage: total = 0.00M</code> looks <em>healthy</em> in isolation — plenty of people run for weeks without touching swap.</p>
+<aside class="take"><strong>Takeaway.</strong> Swap at zero is not a problem. Swap at zero <strong>while RAM is saturated and the disk is nearly full</strong> is the failure: macOS cannot create the swapfile it needs, so memory pressure goes straight to app kills. There was a <code>JetsamEvent</code> in <code>/Library/Logs/DiagnosticReports/</code> from earlier that day confirming it.</aside>
+<p>Also worth knowing: <code>PhysMem: 23G used, 259M unused</code> is <strong>normal</strong> on macOS. It uses all RAM as cache. Judge pressure by jetsam events, compressor size, and swap behaviour — never by "unused".</p>
+<h2>Deleting 9 GB and freeing nothing</h2>
+<p>I started clearing caches. Cleared 8.9 GB of Homebrew downloads. Re-checked free space.</p>
+<p>It hadn't moved. Not "moved a little." Zero.</p>
+<pre class="term"><code>tmutil listlocalsnapshots /
+com.apple.TimeMachine.2026-09-05-215646.local</code></pre>
+<p>A local Time Machine snapshot taken minutes earlier still referenced those blocks. Deleting the files removed the directory entries; the blocks stayed allocated. macOS mints these roughly hourly whenever Time Machine is on — including partway through your cleanup, re-pinning what you just deleted.</p>
+<aside class="take"><strong>Takeaway.</strong> Finish every cleanup with a thin, or it did nothing: ``<code> sudo tmutil thinlocalsnapshots / 999999999999 4 </code>`` Better: pause Time Machine for the duration so it cannot re-pin mid-run — and make sure whatever pauses it turns it back on. I left mine off for half an hour by hand, which is a lousy way to run a backup policy.</aside>
+<h2>The 460 GB file that was 42 GB</h2>
+<pre class="term"><code>$ ls -lh Docker.raw
+460G
+$ du -h Docker.raw
+ 42G</code></pre>
+<p><code>ls -lh</code> reports logical size. <code>Docker.raw</code> is sparse — 460 GB is the ceiling it may grow to, not what it occupies. Always <code>du</code> for disk images, VM bundles, and database files.</p>
+<p>Then Docker Desktop did something I didn't expect. Its backend had been idle, and while I was poking at it, macOS's Resource Saver stopped the VM. On the way out, Docker <strong>compacted the image</strong>: 42 GB → 22 GB. Twenty gigabytes reclaimed by an app shutting down cleanly.</p>
+<p>That taught me two things. Pruning frees space <em>inside</em> the VM; only a clean Docker Desktop shutdown shrinks the host-side file. And the transient <code>500 Internal Server Error</code> responses I'd seen from the Docker API were teardown, not a wedged daemon. I had been one impatient <code>kill -9</code> away from leaving the VM's filesystem dirty — with my Postgres volumes inside it.</p>
+<p>Total reclaimed that night: <strong>36.6 GB → 121.4 GB free.</strong> Load average fell from 10.76 to 2.29.</p>
+<hr>
+<h2>Then I checked when my last backup finished</h2>
+<figure class="plate"><div class="fig">
+  <p class="cap">Figure 4 · Completed backups, 2026</p>
+  <h2>Sixty-two days of silence, with Time&nbsp;Machine switched on</h2>
+  <p class="sub">Each mark is a backup that finished. Settings reported “Time Machine: On”
+    across the entire gap, and never said otherwise.</p>
+  <div class="tl">
+    <div class="axis"></div>
+    <div class="tick" style="left:4%"></div><div class="tlab" style="left:4%">May 24</div>
+    <div class="tick" style="left:11%"></div>
+    <div class="tick" style="left:19%"></div><div class="tlab" style="left:19%">Jun 9–10</div>
+    <div class="tick" style="left:27%"></div>
+    <div class="tick" style="left:29%"></div>
+    <div class="tick" style="left:31%"></div><div class="tlab" style="left:31%">Jul 4–6</div>
+    <div class="gap" style="left:36%;right:12%"></div>
+    <div class="gap" style="left:36%;right:12%;background:none;border:none">
+      <div class="gaplab">62 days · zero completed backups</div>
+      <div class="gapsub">nine failed attempts on the final day alone</div>
+    </div>
+    <div class="tick late" style="left:89%"></div>
+    <div class="tick late" style="left:91%"></div>
+    <div class="tick late" style="left:93%"></div>
+    <div class="tick late" style="left:95%"></div><div class="tlab" style="left:93%">Sep 6</div>
+  </div>
+  <p class="note">The cause was the same full disk: macOS purged the local snapshot Time Machine
+    uses as its incremental reference. It stayed in the list marked <code>(dataless)</code> — present,
+    holding nothing — so every backup after it failed for want of a baseline.</p></div></figure>
+<p>This is the part I want you to act on.</p>
+<p>Time Machine was on. It had always been on. System Settings said so.</p>
+<pre class="term"><code>SnapshotDates (completed backups):
+  2026-05-24
+  2026-06-09
+  2026-07-04
+  2026-07-05
+  2026-07-06     ← last one
+  ...nothing...</code></pre>
+<p><strong>Sixty-two days.</strong> No completed backup since July 6, on a machine that showed "Time Machine: On" the entire time and never once told me otherwise.</p>
+<p>The mechanism is the same root cause:</p>
+<pre class="term"><code>ReferenceLocalSnapshotDate = 2026-07-06 13:44:34</code></pre>
+<p>Time Machine keeps a local snapshot as the baseline it diffs against for incrementals. When the disk filled, macOS purged that snapshot's contents to reclaim space. It stayed in the list, marked <code>(dataless)</code> — present, but holding nothing. With no valid baseline, every subsequent backup failed. And retried. And failed.</p>
+<p>Nine attempts on the final day alone, each burning CPU and I/O into the very pressure that caused it. <code>backupd</code> even tripped macOS's own CPU-resource reporter. None of it surfaced.</p>
+<aside class="take"><strong>Takeaway.</strong> "Enabled" and "working" are different questions. Check the age of the last <em>completed</em> backup: ``<code> defaults read /Library/Preferences/com.apple.TimeMachine \   | sed -n '/SnapshotDates/,/);/p' | tail -3 </code>`<code> Read </code>SnapshotDates<code> (completions), not </code>AttemptDates` — the latter doesn't record every attempt, and I initially misread its gap as a two-month-longer outage than had actually occurred.</aside>
+<p>&gt;</p>
+<aside class="take">Note this reads the preference file directly. <code>tmutil latestbackup</code> needs Full Disk Access, which a scheduled agent won't have.</aside>
+<h2>The re-seed, and what it exposed</h2>
+<figure class="plate"><div class="fig">
+  <p class="cap">Figure 3 · Why backups cost what they cost</p>
+  <h2>The ranking inverts when you count files instead of bytes</h2>
+  <p class="sub">On a network destination every file is a round-trip — going in, and again when the
+    backup is later thinned. The biggest directories are not the expensive ones.</p>
+  <div class="legend">
+    <div class="lgi"><span class="lgs" style="background:var(--s1)"></span>~/.cache</div>
+    <div class="lgi"><span class="lgs" style="background:var(--s2)"></span>Docker image</div>
+    <div class="lgi"><span class="lgs" style="background:var(--s3)"></span>~/.ollama</div>
+    <div class="lgi"><span class="lgs" style="background:var(--s4)"></span>~/.pub-cache</div>
+  </div>
+  <div class="panels">
+    <div class="panel">
+      <h3>Ranked by size</h3><p class="ph">what you would think to exclude</p>
+      <div class="prow"><span class="swatch" style="background:var(--s2)"></span><span class="pname">Docker image</span>
+        <span class="ptrack"><span class="pbar" style="width:100%;background:var(--s2)"></span></span><span class="pval">24.1 GB</span></div>
+      <div class="prow"><span class="swatch" style="background:var(--s1)"></span><span class="pname">~/.cache</span>
+        <span class="ptrack"><span class="pbar" style="width:36.5%;background:var(--s1)"></span></span><span class="pval">8.8 GB</span></div>
+      <div class="prow"><span class="swatch" style="background:var(--s3)"></span><span class="pname">~/.ollama</span>
+        <span class="ptrack"><span class="pbar" style="width:27.4%;background:var(--s3)"></span></span><span class="pval">6.6 GB</span></div>
+      <div class="prow"><span class="swatch" style="background:var(--s4)"></span><span class="pname">~/.pub-cache</span>
+        <span class="ptrack"><span class="pbar" style="width:5%;background:var(--s4)"></span></span><span class="pval">1.2 GB</span></div>
+    </div>
+    <div class="panel">
+      <h3>Ranked by file count</h3><p class="ph">what actually costs you</p>
+      <div class="prow"><span class="swatch" style="background:var(--s1)"></span><span class="pname">~/.cache</span>
+        <span class="ptrack"><span class="pbar" style="width:100%;background:var(--s1)"></span></span><span class="pval">107,760</span></div>
+      <div class="prow"><span class="swatch" style="background:var(--s4)"></span><span class="pname">~/.pub-cache</span>
+        <span class="ptrack"><span class="pbar" style="width:56.9%;background:var(--s4)"></span></span><span class="pval">61,296</span></div>
+      <div class="prow"><span class="swatch" style="background:var(--s2)"></span><span class="pname">Docker image</span>
+        <span class="ptrack"><span class="pbar" style="width:0.9%;background:var(--s2)"></span></span><span class="pval">148</span></div>
+      <div class="prow"><span class="swatch" style="background:var(--s3)"></span><span class="pname">~/.ollama</span>
+        <span class="ptrack"><span class="pbar" style="width:0.4%;background:var(--s3)"></span></span><span class="pval">29</span></div>
+    </div>
+  </div>
+  <p class="note"><strong>~/.ollama is five times larger than ~/.pub-cache and roughly two thousand
+    times cheaper to back up.</strong> Big sequential blobs stream; tiny files each pay the latency.</p></div></figure>
+<p>With the reference snapshot gone, Time Machine abandoned the broken chain and started over: <strong>350 GB, 3.48 million files</strong>, to a consumer NAS over Wi-Fi. It ran for ten and a half hours.</p>
+<p>Watching it taught me the thing I'd have most liked to know a year ago.</p>
+<p>Partway through, throughput collapsed from 22 MB/s to 1.4 MB/s while <code>backupd</code> sat at <strong>173% CPU moving 7.5 files per second</strong>. Not waiting on the network — grinding. Wi-Fi was pristine throughout: 802.11ax, −47 dBm, 1080 Mbps negotiated.</p>
+<p>The cost wasn't bytes. It was <strong>files</strong>.</p>
+<div class="tw"><table><thead><tr><th>Directory</th><th>Size</th><th>Files</th></tr></thead><tbody><tr><td><code>~/.ollama</code></td><td>6.6 GB</td><td><strong>29</strong></td></tr><tr><td><code>~/Library/Containers/com.docker.docker</code></td><td>24.1 GB</td><td><strong>148</strong></td></tr><tr><td><code>~/.pub-cache</code></td><td>1.2 GB</td><td><strong>61,296</strong></td></tr><tr><td><code>~/.cache</code></td><td>8.8 GB</td><td><strong>107,760</strong></td></tr></tbody></table></div>
+<p><code>~/.ollama</code> is five times larger than <code>~/.pub-cache</code> and roughly two thousand times cheaper to back up. Big sequential blobs stream. Tiny files are a network round-trip each.</p>
+<p>And you pay twice. Later, during the post-backup thinning pass, I watched it delete a superseded backup one <code>unlink</code> at a time over SMB — grinding through <code>~/.cache/uv/archive-v0/…</code>, the Python <code>uv</code> package cache. <strong>Whatever you back up, you eventually pay to delete.</strong></p>
+<p>None of that data was worth keeping. It's all reconstructible from a registry, a lockfile, or a re-download.</p>
+<p>I excluded 75 GB across eleven directories — container images, package caches, toolchains — using sticky path exclusions so they survive the folders being deleted and recreated:</p>
+<pre class="term"><code>sudo tmutil addexclusion -p ~/.cache ~/.npm ~/.ollama ~/.rustup</code></pre>
+<p>The next incremental:</p>
+<pre class="term"><code>Total copied: 2455.05 MB      Avg speed: 192.91 MB/min</code></pre>
+<p><strong>About thirteen minutes, against ten and a half hours.</strong></p>
+<p>That first one still carried some pre-exclusion state. Once the full list was applied, the next four settled at <strong>five to ten minutes</strong> each — a routine incremental to a consumer NAS over Wi-Fi, which is what it should have been all along.</p>
+<p>And afterwards, for the first time in the whole exercise:</p>
+<pre class="term"><code>vm.swapusage: total = 5120.00M  used = 3408.25M</code></pre>
+<p>The safety valve was working again.</p>
+<p>One more thing was quietly making it worse. Checking what held files open on the backup volume:</p>
+<pre class="term"><code>73 open handles  mds_store
+ 5 open handles  mds</code></pre>
+<p>Spotlight was indexing the backup destination — an 819 GB sparsebundle, over SMB. You cannot usefully Spotlight-search a Time Machine backup; it has its own browse interface. So this was pure competition for the same slow link, on every backup.</p>
+<p>Worth checking, and a trap inside a trap: <code>sudo mdutil -i off /Volumes/&lt;backup&gt;</code> does <strong>not</strong> disable it. It drops to <code>kMDConfigSearchLevelFSSearchOnly</code> and still reports <code>Indexing enabled</code>. The exclusion that actually works is System Settings → Spotlight → Search Privacy, and the volume must be mounted when you add it — which for a network destination means during a backup.</p>
+<aside class="take"><strong>Takeaway.</strong> Filter exclusion candidates by <strong>file count</strong>, not size. A 300 MB directory with 200,000 tiny files costs far more than 6 GB of model weights. And exclude subpaths deliberately — <code>~/.cargo/registry</code>, not <code>~/.cargo</code>, which holds credentials; <code>~/.m2/repository</code>, not <code>~/.m2</code>.</aside>
+<h2>What I built, and what it taught me about monitoring</h2>
+<p>Every signal was present for days beforehand. Jetsam events, macOS's own excessive-disk-write reports, free space falling. Nothing was watching.</p>
+<p>So I wrote a small toolkit — a read-only diagnostic, a tiered reclaimer that's dry-run by default, and a launchd agent that checks every two hours. Roughly a thousand lines of zsh. The interesting part wasn't the scripts; it was getting the <em>alerting</em> right, and I got it wrong twice first.</p>
+<p><strong>Mistake one: history escalating current state.</strong> I treated jetsam reports as an alerting signal. After the disk was fixed, the guard kept reporting WARN for three days over kills that had already stopped — precisely when a monitor most needs to go quiet. Now there are two tiers: <em>checks</em> are current conditions and escalate; <em>notes</em> are historical context and never do.</p>
+<p><strong>Mistake two: naming the wrong subsystem.</strong> Every notification title was hardcoded <code>"Disk ${level}"</code> and the message body was built entirely from the disk branch. So the stale-backup alert announced itself as <strong>"Disk CRIT: 22% free"</strong> on a machine with 121 GB free — naming the wrong problem and contradicting its own threshold in the same sentence. Now each check owns its verdict and its wording, and the alert names the subsystem that's actually unhealthy.</p>
+<p><strong>A third, subtler one:</strong> not all <code>JetsamEvent</code>s mean the same thing. <code>per-process-limit</code> is one process hitting its own ceiling — routine. <code>vm-pageshortage</code> is real memory exhaustion. Counting them together cries wolf over normal housekeeping. And my first classifier used <code>sudo -n grep</code>, which fails whenever a password is required — so it would have reported "no memory events" forever, silently, with no way to tell that answer apart from the truth.</p>
+<aside class="take"><strong>Takeaway.</strong> A check that reads <em>healthy</em> when it cannot tell is worse than no check. Report UNKNOWN. This bit me three separate times in one night, in three different scripts.</aside>
+<h2>Who this actually affects</h2>
+<figure class="plate"><div class="fig">
+  <p class="cap">Figure 5 · Twenty-four hours later</p>
+  <h2>Same machine, same hardware</h2>
+  <p class="sub">No parts replaced. The SSD reported 0 media errors and 0% endurance used
+    throughout.</p>
+  <div class="score">
+    <div class="cell good"><div class="k">Free space</div><div class="before">36.6 GB</div><div class="after">116.7 GB</div></div>
+    <div class="cell good"><div class="k">Swap available</div><div class="before">0 MB</div><div class="after">3,072 MB</div></div>
+    <div class="cell good"><div class="k">Last backup</div><div class="before">62 days</div><div class="after">Today</div></div>
+    <div class="cell good"><div class="k">Backup duration</div><div class="before">10.5 hrs</div><div class="after">5–10 min</div></div>
+  </div>
+  <p class="note">The backup figure is the full re-seed against a routine incremental, after
+    75 GB of reconstructible caches were excluded from the backup set.</p></div></figure>
+<p>Honest scoping, because I don't think this is universal.</p>
+<p>This bites when three conditions coincide: <strong>a nearly-full disk, a slow backup destination, and a heavy polyglot toolchain.</strong> Miss any one and you never see it.</p>
+<p>- With 500 GB free, the swap valve never fails and none of this happens. - With a fast local SSD as your destination, the file-count cost is still there — it's just ninety seconds instead of ten hours, so you never notice. - Most developers never back up a dev machine at all beyond git and cloud sync, and quietly accept that a rebuild costs a day.</p>
+<p>I'd been running all three conditions for months without knowing. The disk crept up, the backups died, and macOS never mentioned either.</p>
+<h2>Four checks worth running right now</h2>
+<p>They take under a minute.</p>
+<pre class="term"><code># 1. Real free space (not what df or Finder tell you)
+diskutil info /System/Volumes/Data | grep &quot;Container Free&quot;</code></pre>
+<pre class="term"><code># 2. When did a backup last actually COMPLETE?
+defaults read /Library/Preferences/com.apple.TimeMachine \
+  | sed -n &#x27;/SnapshotDates/,/);/p&#x27; | tail -3</code></pre>
+<pre class="term"><code># 3. Are snapshots holding space you think you freed?
+tmutil listlocalsnapshots /</code></pre>
+<pre class="term"><code># 4. Is a cache in every one of your backups?
+tmutil isexcluded ~/.cache</code></pre>
+<p>If #2 surprises you, this article did its job.</p>
+<hr>
+<p class="dek">The toolkit is on GitHub: <a href="https://github.com/donco-labs/sparkling-clean">sparkling-clean</a>, or <code>brew tap donco-labs/tap &amp;&amp; brew install sparkling-clean</code>. It's macOS-only, it's been proven on exactly one machine, and the exclusion list is tuned to my toolchain — treat it as a starting point rather than gospel. The <code>docs/</code> directory has the full postmortem, including which mistake produced which line of code.</p>
+</main>
+<footer>
+  Draft for review. The toolkit described here is at
+  <a href="https://github.com/donco-labs/sparkling-clean">donco-labs/sparkling-clean</a>;
+  the full postmortem, including the four theories that turned out wrong, is in its
+  <code>docs/</code> directory.
+</footer>
+</div>
