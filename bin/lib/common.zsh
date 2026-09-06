@@ -278,6 +278,14 @@ typeset -ga SC_CHECKS=()   # level \t name \t headline \t detail
 typeset -ga SC_NOTES=()
 
 sc_check() { SC_CHECKS+=("${1}"$'\t'"${2}"$'\t'"${3}"$'\t'"${4:-$3}") }
+
+# Accessors. The tab-separated record is an implementation detail; splitting it
+# by hand at every call site duplicated the format five times and made the
+# construct impossible to quote safely inside a CI `zsh -c '...'`.
+sc_check_level()    { print -r -- "${1%%$'\t'*}" }
+sc_check_name()     { print -r -- "$1" | cut -f2 }
+sc_check_headline() { print -r -- "$1" | cut -f3 }
+sc_check_detail()   { print -r -- "$1" | cut -f4 }
 sc_note()  { SC_NOTES+=("$1") }
 
 sc_level_rank() { case $1 in (CRIT) print -r -- 2 ;; (WARN) print -r -- 1 ;; (*) print -r -- 0 ;; esac }
@@ -288,7 +296,7 @@ sc_worst_check() {
   # otherwise nothing is ever selected and callers get an empty record.
   local c best=-1 r winner=""
   for c in $SC_CHECKS; do
-    r=$(sc_level_rank ${c%%$'\t'*})
+    r=$(sc_level_rank $(sc_check_level $c))
     (( r > best )) && { best=$r; winner=$c }
   done
   print -r -- $winner
@@ -296,7 +304,7 @@ sc_worst_check() {
 
 sc_overall_level() {
   local w=$(sc_worst_check)
-  [[ -n $w ]] && print -r -- ${w%%$'\t'*} || print -r -- OK
+  [[ -n $w ]] && sc_check_level $w || print -r -- OK
 }
 
 # Populates SC_CHECKS / SC_NOTES. Single source of truth: the report and the

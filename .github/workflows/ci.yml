@@ -1,0 +1,127 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly. Most of this toolkit parses the text output of tmutil, diskutil and
+    # smartctl, so the likeliest way it breaks is Apple changing a format in a
+    # macOS update — not us changing code. A scheduled run catches that.
+    - cron: "0 14 * * 1"
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-15, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: macOS version
+        run: sw_vers
+
+      - name: Syntax-check every script
+        run: |
+          for f in bin/*.zsh bin/lib/*.zsh bin/sparkling-clean extra/swiftbar/*.sh; do
+            zsh -n "$f" && echo "ok  $f"
+          done
+
+      - name: Lint the LaunchAgent plist
+        run: plutil -lint launchd/*.plist
+
+      - name: Dispatcher help works
+        run: ./bin/sparkling-clean --help | grep -q "macOS disk triage"
+
+      - name: Unknown subcommand exits 2
+        run: |
+          set +e
+          ./bin/sparkling-clean not-a-command >/dev/null 2>&1
+          [ $? -eq 2 ] || { echo "expected exit 2"; exit 1; }
+
+      - name: Read-only helpers work unprivileged
+        run: |
+          zsh -c '
+            source bin/lib/common.zsh
+            free=$(sc_free_bytes); total=$(sc_total_bytes)
+            [[ -n $free && -n $total && $total -gt 0 ]] || { print "container bytes unreadable"; exit 1 }
+            print "free=$free total=$total pct=$(sc_pct_free)"
+            [[ $(sc_human 1500000000) == "1.5 GB" ]] || { print "sc_human wrong"; exit 1 }
+          '
+
+      - name: Sparse files are measured by allocation, not logical size
+        run: |
+          zsh -c '
+            source bin/lib/common.zsh
+            mkfile -n 400m /tmp/sparse.bin
+            sz=$(sc_size_of /tmp/sparse.bin)
+            # ls would report 400 MB; du must report far less.
+            (( sz < 10000000 )) || { print "sparse file measured as $sz — regression"; exit 1 }
+            print "sparse ok: $sz bytes allocated"
+            rm -f /tmp/sparse.bin
+          '
+
+      - name: Health model runs and yields a level
+        run: |
+          zsh -c '
+            source bin/lib/common.zsh
+            sc_run_health_checks
+            lvl=$(sc_overall_level)
+            [[ $lvl == (OK|WARN|CRIT) ]] || { print "bad level: $lvl"; exit 1 }
+            (( ${#SC_CHECKS} >= 4 )) || { print "expected >=4 checks"; exit 1 }
+            print "level=$lvl checks=${#SC_CHECKS}"
+          '
+
+      - name: Undeterminable backup age reports UNKNOWN, never OK
+        # The single most important behaviour to protect: a check that reads
+        # healthy when it cannot tell is worse than no check. This has regressed
+        # twice — once via `sudo -n` silently failing, once by treating an
+        # unreadable value as absence. Stubbed rather than relying on the runner
+        # having no Time Machine, so it is deterministic on a dev machine too.
+        run: |
+          zsh -c '
+            source bin/lib/common.zsh
+            sc_tm_days_since_backup() { return 1 }      # simulate unreadable prefs
+            sc_run_health_checks
+            for c in $SC_CHECKS; do
+              [[ $(sc_check_name $c) == Backup ]] || continue
+              [[ $(sc_check_level $c) != OK ]] || { print "FAIL: unreadable backup age reported OK"; exit 1 }
+              print "correctly non-OK: $(sc_check_headline $c)"
+            done
+          '
+
+      - name: Worst check always names a subject
+        run: |
+          zsh -c '
+            source bin/lib/common.zsh
+            sc_run_health_checks
+            w=$(sc_worst_check)
+            [[ -n $w ]] || { print "sc_worst_check returned empty"; exit 1 }
+            n=$(sc_check_name $w)
+            [[ -n $n ]] || { print "worst check has no name"; exit 1 }
+            print "subject=$n"
+          '
+
+      - name: Guard emits valid JSON
+        run: |
+          ./bin/disk-guard.zsh --json > /tmp/guard.json || true
+          python3 -c "import json; d=json.load(open('/tmp/guard.json')); assert d['level'] in ('OK','WARN','CRIT'), d['level']; assert isinstance(d['checks'], list) and len(d['checks']) >= 4, 'too few checks'; assert d['subject'], 'empty subject'; print('json ok:', d['level'], d['subject'])"
+
+      - name: Destructive paths are dry-run by default
+        run: |
+          set +e
+          out=$(./bin/reclaim.zsh 2>&1)
+          echo "$out" | grep -q "dry run" || { echo "reclaim did not announce dry-run"; exit 1; }
+          echo "$out" | grep -q "  RUN  " && { echo "reclaim EXECUTED without --apply"; exit 1; }
+          out=$(./bin/tm-exclude.zsh 2>&1)
+          echo "$out" | grep -qi "dry run\|already excluded" || { echo "tm-exclude not dry-run"; exit 1; }
+          echo "dry-run defaults hold"
+
+      - name: SwiftBar plugin renders
+        run: |
+          out=$(./extra/swiftbar/sparkling-clean.10m.sh)
+          echo "$out" | head -1 | grep -q "💾" || { echo "no menu bar title"; exit 1; }
+          echo "$out" | grep -q -- "---" || { echo "no separator"; exit 1; }
+          echo "$out"

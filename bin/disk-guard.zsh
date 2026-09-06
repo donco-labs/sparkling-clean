@@ -15,11 +15,12 @@ setopt no_err_return
 source ${0:A:h}/lib/common.zsh
 sc_require_macos
 
-local force=0 quiet=0
+local force=0 quiet=0 json=0
 while (( $# )); do
   case $1 in
     --force) force=1 ;;
     --quiet) quiet=1 ;;
+    --json)  json=1; quiet=1 ;;
     -h|--help) sed -n '2,14p' ${0:A}; exit 0 ;;
   esac
   shift
@@ -37,19 +38,19 @@ case $level in (CRIT) rc=2 ;; (WARN) rc=1 ;; esac
 # checked first. "Backup CRIT: 61 days" beats "Disk CRIT: 22% free" on a machine
 # with 121 GB spare.
 local worst=$(sc_worst_check)
-local subject=$(print -r -- $worst | cut -f2)
-local headline=$(print -r -- $worst | cut -f3)
+local subject=$(sc_check_name $worst)
+local headline=$(sc_check_headline $worst)
 
 # Body: only the checks that are not OK, then history as context.
 local -a lines
 local c lvl
 for c in $SC_CHECKS; do
-  lvl=${c%%$'\t'*}
+  lvl=$(sc_check_level $c)
   [[ $lvl == OK ]] && continue
-  lines+=("$(print -r -- $c | cut -f4)")
+  lines+=("$(sc_check_detail $c)")
 done
 local msg="${(j: :)lines}"
-[[ -z $msg ]] && msg="$(print -r -- $worst | cut -f4)"
+[[ -z $msg ]] && msg="$(sc_check_detail $worst)"
 (( ${#SC_NOTES} )) && msg="$msg  [${(j:; :)SC_NOTES}]"
 
 # ---- log always -------------------------------------------------------------
@@ -78,6 +79,31 @@ local notify_ts=$prev_notify_ts
 (( should_notify && ! quiet )) && notify_ts=$now
 printf '%s\t%s\n' $level $notify_ts > $STATE
 
+# ---- machine-readable ------------------------------------------------------
+# Consumed by the SwiftBar plugin and by CI. Hand-rolled rather than pulling in
+# jq: this toolkit has no runtime dependencies and that is worth keeping.
+if (( json )); then
+  local first=1   # NOT `local c` — c is declared above, and zsh
+                  # prints an existing var when typeset gets no assignment
+  printf '{"level":"%s","exit":%d,"subject":"%s","headline":"%s","checks":[' \
+         $level $rc "$subject" "$headline"
+  for c in $SC_CHECKS; do
+    (( first )) || printf ','
+    first=0
+    printf '{"level":"%s","name":"%s","headline":"%s"}' \
+      "$(sc_check_level $c)" "$(sc_check_name $c)" "$(sc_check_headline $c)"
+  done
+  printf '],"notes":['
+  first=1
+  for c in $SC_NOTES; do
+    (( first )) || printf ','
+    first=0
+    printf '"%s"' "${c//\"/\\\"}"
+  done
+  printf ']}\n'
+  exit $rc
+fi
+
 # ---- output -----------------------------------------------------------------
 case $level in
   (CRIT) sc_crit "${subject}: ${headline}" ;;
@@ -85,8 +111,8 @@ case $level in
   (OK)   sc_ok   "all checks pass" ;;
 esac
 for c in $SC_CHECKS; do
-  [[ ${c%%$'\t'*} == OK ]] && continue
-  sc_info "$(print -r -- $c | cut -f4)"
+  [[ $(sc_check_level $c) == OK ]] && continue
+  sc_info "$(sc_check_detail $c)"
 done
 for n in $SC_NOTES; do sc_dim "      note: $n"; done
 

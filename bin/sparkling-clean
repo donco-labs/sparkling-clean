@@ -1,0 +1,67 @@
+#!/usr/bin/env zsh
+# sparkling-clean — subcommand dispatcher.
+#
+# The repo drives everything through `make`, which is fine in a checkout but
+# useless once Homebrew has installed the scripts into libexec. This is the
+# installed entry point; `make` targets simply call the same scripts directly.
+
+emulate -L zsh
+setopt no_err_return
+
+local here=${0:A:h}
+# Homebrew installs the scripts into libexec and symlinks this file into bin, so
+# resolve through the symlink (${0:A}) and look for the scripts beside us.
+[[ -d $here/lib ]] || here=${0:A:h:h}/libexec
+
+local -A CMDS=(
+  report        "disk-report.zsh"
+  check         "disk-guard.zsh"
+  reclaim       "reclaim.zsh"
+  docker        "docker-reclaim.zsh"
+  tm-exclude    "tm-exclude.zsh"
+)
+
+usage() {
+  print -r -- "sparkling-clean — macOS disk triage toolkit"
+  print -r -- ""
+  print -r -- "usage: sparkling-clean <command> [options]"
+  print -r -- ""
+  print -r -- "  report        full read-only diagnostic, ending in a verdict"
+  print -r -- "  check         run the health guard once (exit 0 ok / 1 warn / 2 crit)"
+  print -r -- "  reclaim       tiered disk reclamation          (dry-run by default)"
+  print -r -- "  docker        Docker space, never touches volumes (dry-run by default)"
+  print -r -- "  tm-exclude    apply the Time Machine exclusion policy (dry-run by default)"
+  print -r -- "  install-guard install the launchd watchdog (checks every 2h)"
+  print -r -- "  uninstall-guard"
+  print -r -- "  version"
+  print -r -- ""
+  print -r -- "Every destructive command needs --apply. Pass --help to any of them."
+}
+
+local cmd=${1:-}
+(( $# )) && shift
+
+case $cmd in
+  ""|-h|--help|help) usage ;;
+  version|-v|--version)
+    print -r -- "sparkling-clean ${SPARKLING_CLEAN_VERSION:-dev}" ;;
+  install-guard)
+    local plist=$HOME/Library/LaunchAgents/com.sparklingclean.diskguard.plist
+    mkdir -p ${plist:h}
+    sed "s|__SC_ROOT__|${here:h}|g" $here/../launchd/com.sparklingclean.diskguard.plist 2>/dev/null \
+      > $plist || { print -ru2 -- "template not found"; exit 1 }
+    launchctl unload $plist 2>/dev/null
+    launchctl load  $plist && print -r -- "loaded — checks every 2h, notifies on WARN/CRIT" ;;
+  uninstall-guard)
+    local plist=$HOME/Library/LaunchAgents/com.sparklingclean.diskguard.plist
+    launchctl unload $plist 2>/dev/null
+    rm -f $plist && print -r -- "removed" ;;
+  *)
+    local script=${CMDS[$cmd]:-}
+    if [[ -z $script ]]; then
+      print -ru2 -- "sparkling-clean: unknown command '$cmd'"
+      print -ru2 -- "try: sparkling-clean --help"
+      exit 2
+    fi
+    exec zsh $here/$script "$@" ;;
+esac

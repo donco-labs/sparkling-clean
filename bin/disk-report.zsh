@@ -203,9 +203,9 @@ sc_hdr "Verdict"
 sc_run_health_checks
 local c lvl name headline
 for c in $SC_CHECKS; do
-  lvl=${c%%$'\t'*}
-  name=$(print -r -- $c | cut -f2)
-  headline=$(print -r -- $c | cut -f3)
+  lvl=$(sc_check_level $c)
+  name=$(sc_check_name $c)
+  headline=$(sc_check_headline $c)
   case $lvl in
     (CRIT) printf '  %s  %-10s %s\n' "${SC_RED}CRIT${SC_RST}" $name "$headline" ;;
     (WARN) printf '  %s  %-10s %s\n' "${SC_YEL}WARN${SC_RST}" $name "$headline" ;;
