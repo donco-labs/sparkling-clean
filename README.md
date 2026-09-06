@@ -46,8 +46,25 @@ make install-guard   # launchd watchdog: checks every 2h, notifies on WARN/CRIT
 
 ```bash
 brew install --cask swiftbar
-ln -s "$PWD/extra/swiftbar/sparkling-clean.10m.sh" ~/Library/Application\ Support/SwiftBar/
+mkdir -p "$HOME/Library/Application Support/SwiftBar"
+ln -sf "$PWD/extra/swiftbar/sparkling-clean.10m.sh" "$HOME/Library/Application Support/SwiftBar/"
+open -a SwiftBar
 ```
+
+Quote the destination rather than backslash-escaping the space — the escape does
+not survive being copied out of a terminal or a rendered page. Create the folder
+first as well: SwiftBar has no plugin directory until its first launch, so `ln`
+fails on a missing target. Installed via Homebrew, the plugin lives under the
+formula prefix instead:
+
+```bash
+ln -sf "$(brew --prefix)/opt/sparkling-clean/libexec/extra/swiftbar/sparkling-clean.10m.sh" \
+       "$HOME/Library/Application Support/SwiftBar/"
+```
+
+On first launch SwiftBar asks which folder to use — point it at that one. It is
+notarized but ships quarantined, so macOS shows its standard first-run dialog;
+approve it in System Settings → Privacy & Security → Open Anyway.
 
 Shows nothing but an icon when healthy; colours the title by the worst check when
 not. Reads the guard's `--json` (0.4 s) rather than the full report (tens of
