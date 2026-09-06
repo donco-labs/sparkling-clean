@@ -96,5 +96,33 @@ for needle, key in [('<h2>What SMART actually told me</h2>','fig-ratio'),
     body = body[:end] + f'<figure class="plate"><div class="fig">{plates[key]}</div></figure>\n' + body[end:]
 
 shell = (HERE / 'review-shell.html').read_text()
-(HERE / 'review.html').write_text(shell.replace('<!--FIGCSS-->', figcss).replace('<!--BODY-->', body))
+page  = shell.replace('<!--FIGCSS-->', figcss).replace('<!--BODY-->', body)
+(HERE / 'review.html').write_text(page)
 print(f'  review.html · {len(md.split())} words · {len(plates)} plates')
+
+# ------------------------------------------------------ standalone variant --
+# One file, no network: fonts embedded as base64 woff2, figures already inline
+# HTML/CSS. Adds the document skeleton the Artifact host otherwise supplies.
+faces = (HERE / 'fonts.css')
+if faces.exists():
+    alone = page.replace(
+        '<link rel="preconnect" href="https://fonts.googleapis.com">\n'
+        '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n', '')
+    alone = re.sub(r'<link rel="stylesheet" href="https://fonts\.googleapis[^>]*>\n', '', alone)
+    alone = alone.replace('<style>', '<style>\n' + faces.read_text() + '\n', 1)
+    # The review note is artifact-specific; a shared file has no comment tool.
+    alone = re.sub(r'<div class="review">.*?</div>', '''<div class="review">
+    <strong>Draft — not published.</strong> Comments welcome by whatever means you
+    normally reach me. Every number here is drawn from the session record rather than
+    reconstructed; flag anything that reads as overstated and it gets checked against
+    the logs again. The figures are live HTML, identical to the images that will be
+    uploaded to Medium.</div>''', alone, flags=re.S)
+    title = re.search(r'<title>([^<]*)</title>', alone).group(1)
+    alone = ('<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
+             '<meta name="viewport" content="width=device-width,initial-scale=1">\n'
+             f'<meta name="description" content="A night of chasing a failing disk that turned out to be three separate problems.">\n'
+             + alone.replace('<title>', '<title>', 1)
+             ).replace('<div class="wrap">', '</head>\n<body>\n<div class="wrap">', 1) + '\n</body>\n</html>\n'
+    out = HERE / 'article-standalone.html'
+    out.write_text(alone)
+    print(f'  article-standalone.html · {len(alone)//1024} KB · fonts embedded, no network needed')

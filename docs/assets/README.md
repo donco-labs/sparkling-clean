@@ -39,3 +39,23 @@ rather than relying on colour alone.
 Colour follows the **entity**, not its rank — that is what makes the inversion in
 `fig-inversion.png` legible, since the same directory keeps its hue as it moves
 between panels.
+
+## The two HTML outputs
+
+`build-review.py` produces both from `../article-draft.md` + `figures.html`:
+
+| File | For |
+|---|---|
+| `review.html` | Publishing as an Artifact. No document skeleton (the host supplies it); fonts from Google Fonts. |
+| `article-standalone.html` | **Sending to people.** One file, ~324 KB, zero network requests — fonts embedded as base64 woff2, figures already inline HTML. Open it from a thumb drive on a plane and it renders identically. |
+
+Rebuild both:
+
+```bash
+python3 docs/assets/build-review.py
+```
+
+`fonts.css` holds the base64 `@font-face` blocks. Regenerate it only if the
+typefaces change — it is the latin subset of Fraunces, Newsreader and IBM Plex
+Mono, collapsed to one face per file (the first two are variable, so several
+weights share a URL).
