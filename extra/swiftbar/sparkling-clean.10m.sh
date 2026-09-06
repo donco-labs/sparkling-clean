@@ -93,8 +93,14 @@ if [[ -n $notes_blob ]]; then
 fi
 
 print -r -- "---"
-# terminal=true opens a Terminal window and runs it, so the full report is one
-# click away without this plugin having to be slow.
+# terminal=true opens Terminal and runs the command there. Two entries, because
+# the two reports have very different costs and a menu click should not spring a
+# surprise password prompt:
+#   --brief  ~1.5s, no sudo   — space, snapshots, Time Machine, exclusions
+#   full     ~40s, sudo       — adds SMART, which needs `sudo smartctl`
 local cli=${SC:h}/sparkling-clean
-[[ -x $cli ]] && print -r -- "Full report… | bash=${cli} param1=report terminal=true"
+if [[ -x $cli ]]; then
+  print -r -- "Quick summary… | bash=${cli} param1=report param2=--brief terminal=true"
+  print -r -- "Full report (~40s, asks for sudo)… | bash=${cli} param1=report terminal=true"
+fi
 print -r -- "Refresh | refresh=true"
