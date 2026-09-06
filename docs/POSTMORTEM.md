@@ -98,9 +98,10 @@ side by side.
 6. **Exclude the cloud-sync parent, not the visible child.** Excluding `My Drive`
    left `Other computers/` and `.shortcut-targets-by-id/` indexed.
 
-7. **Time Machine had been dead for 105 days and said nothing.** `AttemptDates`
-   jumps 2026-05-23 → 2026-09-05; `SnapshotDates` (actual completed backups) ends
-   2026-07-06. `ReferenceLocalSnapshotDate` pointed at
+7. **Time Machine had been dead for 62 days and said nothing.** `SnapshotDates`
+   (actual completed backups) runs 05-24, 06-09, 07-04, 07-05, 07-06 — then stops
+   until 09-06. `AttemptDates` shows a longer gap, but it does not record every
+   attempt; reading it as a completion gap overstates the outage. `ReferenceLocalSnapshotDate` pointed at
    `com.apple.TimeMachine.2026-07-06-094434.local` — the snapshot found marked
    **`(dataless)`**: macOS had purged its contents under space pressure, leaving
    TM with no baseline to diff against. Every backup since failed, retrying nine

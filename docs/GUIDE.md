@@ -329,9 +329,13 @@ backupd retries hard (CPU-resource diags), adding to the I/O storm
 nothing is surfaced to the user
 ```
 
-On the host this toolkit came from, that ran from 2026-05-23 to 2026-09-05 —
-**105 days with no completed backup**, while Settings showed Time Machine happily
-"on". Nine failed attempts on the final day alone.
+On the host this toolkit came from, backups completed normally until
+2026-07-06 and then stopped dead — **62 days with no completed backup**, while
+Settings showed Time Machine happily "on". Nine failed attempts on the final day.
+
+Read `SnapshotDates` (completions), not `AttemptDates`: the latter does not
+record every attempt, and mistaking its gap for a completion gap overstates the
+outage.
 
 So the check is on the **age of the last completed backup**, not the on/off flag:
 
