@@ -72,8 +72,10 @@ def rename(css):
 
 figcss = figs[figs.index('<style>')+7:figs.index('</style>')]
 figcss = re.sub(r'(?m)^  (?=[.#a-z])', '  .plate ', figcss)          # scope EVERY selector
-figcss = re.sub(r'(?m)^  \.plate :root\{.*?\n  \}', '', figcss, flags=re.S)
-figcss = re.sub(r'\n\s*\.plate \*\{box-sizing:border-box\}', '', figcss)
+# `:root` and `*` begin with characters the scoping lookahead does not match, so
+# they survive unscoped and duplicate declarations the shell already makes.
+figcss = re.sub(r'(?m)^  :root\{.*?\n  \}\n?', '', figcss, flags=re.S)
+figcss = re.sub(r'(?m)^  \*\{box-sizing:border-box\}\n?', '', figcss)
 figcss = re.sub(r'\n\s*\.plate body\{.*?antialiased\}', '', figcss, flags=re.S)
 figcss = rename(figcss)
 figcss = figcss.replace('.plate .fig{width:1400px;margin:28px auto;', '.plate .fig{width:1400px;')

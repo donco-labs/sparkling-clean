@@ -25,9 +25,9 @@
   }
   *{box-sizing:border-box}
   body{background:var(--paper);color:var(--ink);
-    font:400 19px/1.68 Newsreader,Georgia,"Times New Roman",serif;margin:0;
+    font:400 21px/1.66 Newsreader,Georgia,"Times New Roman",serif;margin:0;
     -webkit-font-smoothing:antialiased}
-  .wrap{max-width:672px;margin:0 auto;padding:0 28px 120px}
+  .wrap{max-width:916px;margin:0 auto;padding:0 28px 120px}
   main{max-width:none}
 
   /* ---------- masthead ---------- */
@@ -74,25 +74,24 @@
      column AND reflows, so the plate's height follows automatically — a
      transform would have left the original height behind as dead space, and
      overflow scrolling (the previous behaviour) put a scrollbar on every one. */
-  .plate{margin:2.6em 0 2.8em;width:min(1180px,calc(100vw - 40px));
-    position:relative;left:50%;transform:translateX(-50%);overflow:hidden;
+  /* Plates sit in the text column, not outside it: 860px of content against a
+     1400px-wide figure gives zoom .614, which keeps the smallest figure type
+     around 10px. Equal widths mean the page reads as one column rather than
+     two competing ones. */
+  .plate{margin:2.6em 0 2.8em;width:100%;overflow:hidden;
     border:1px solid var(--rule);border-radius:3px;background:var(--f-surface-1)}
   .plate .fig{font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-    zoom:.842}
+    zoom:.614}
   .plate *{box-sizing:border-box}
-  @media(max-width:1239px){ .plate .fig{zoom:.66} .plate{width:calc(100vw - 40px)} }
-  @media(max-width:899px){  .plate .fig{zoom:.50} }
-  @media(max-width:659px){  .plate .fig{zoom:.34} .plate{width:calc(100vw - 24px)} }
+  @media(max-width:915px){ .plate .fig{zoom:calc((100vw - 56px) / 1400)} }
+  @media(max-width:659px){ .wrap{padding:0 16px 80px}
+                           .plate .fig{zoom:calc((100vw - 32px) / 1400)} }
 
 <!--FIGCSS-->
   footer{margin:80px 0 0;padding-top:26px;border-top:1px solid var(--rule);
     font-size:16px;color:var(--ink-3)}
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
-  @media(max-width:760px){
-    body{font-size:18px}
-    .plate{width:calc(100vw - 32px)}
-    .wrap{padding:0 16px 80px}
-  }
+  @media(max-width:760px){ body{font-size:18.5px} }
 </style>
 
 <div class="wrap">
