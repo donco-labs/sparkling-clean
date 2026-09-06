@@ -70,6 +70,41 @@ if sc_tm_running; then
   sc_info "backup RUNNING now$( [[ -n $prog ]] && printf ' (%.1f%%)' $(( prog * 100 )) )"
 fi
 
+# ================================================ TM EXCLUSION HYGIENE ======
+sc_hdr "Time Machine exclusions"
+local -a unexcluded
+local unex_total=0 cand sz
+for cand in $SC_TM_EXCLUDE_CANDIDATES; do
+  [[ -e $cand ]] || continue
+  sc_tm_excluded $cand && continue
+  sz=$(sc_size_of $cand)
+  (( sz < 500000000 )) && continue          # ignore anything under 500 MB
+  unexcluded+=("$cand")
+  (( unex_total += sz ))
+done
+
+if (( ${#unexcluded} == 0 )); then
+  sc_ok "no large rebuildable directories are being backed up"
+else
+  sc_warn "$(sc_human $unex_total) of rebuildable data is in every backup:"
+  # Biggest first — that is the order you want to act in.
+  { for cand in $unexcluded; do
+      printf '%d\t%s\t%s\n' $(sc_size_of $cand) "$(sc_human $(sc_size_of $cand))" "${cand/#$HOME/~}"
+    done
+  } | sort -rn -k1 | awk -F'\t' '{printf "        %10s  %s\n", $2, $3}'
+  sc_info "All are reconstructible from a registry, lockfile or re-download."
+  sc_info "Review, then exclude (-p survives the folder being recreated):"
+  # Quote each path individually; joining a (q)-quoted array escapes the
+  # separators too and collapses everything into one argument.
+  local cmdline=""
+  for cand in $unexcluded; do cmdline+=" ${(q)cand}" ; done
+  print -r -- ""
+  print -r -- "        sudo tmutil addexclusion -p${cmdline}"
+  print -r -- ""
+  sc_dim "        Verify:  tmutil isexcluded <path>"
+  sc_dim "        Undo:    sudo tmutil removeexclusion -p <path>"
+fi
+
 (( brief )) && exit 0
 
 # ========================================================== 4. MEMORY =======

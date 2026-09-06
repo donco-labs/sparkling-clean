@@ -43,6 +43,15 @@ defaults read /Library/Preferences/com.apple.TimeMachine | sed -n '/SnapshotDate
 tmutil status | grep -E "BackupPhase|Percent|TimeRemaining"
 ```
 ```bash
+# Is this directory in every backup?  (works unprivileged)
+tmutil isexcluded ~/Library/Containers/com.docker.docker
+```
+```bash
+# Exclude rebuildable data. -p = sticky to the path, survives recreation.
+sudo tmutil addexclusion -p ~/.cache ~/.npm ~/.ollama
+sudo tmutil removeexclusion -p <path>     # undo
+```
+```bash
 # Pause TM during cleanup so it cannot re-pin deletions. ALWAYS re-enable.
 sudo tmutil disable
 sudo tmutil enable

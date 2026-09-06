@@ -347,6 +347,39 @@ one means anything.
 Thresholds `SC_TM_WARN_D` (2 days) and `SC_TM_CRIT_D` (7 days). A backup that is
 *currently running* does not clear the alert — only a completed one does.
 
+### A healthy backup can still be mostly garbage
+
+The other silent failure: the chain works fine, but most of what it copies is
+reconstructible. Container images, package caches and toolchains get backed up
+like anything else, inflating the byte count and — far worse for a network
+destination — the **file count**, which is what actually costs.
+
+On the source host, 75 GB across eleven directories was going to a NAS over
+Wi-Fi. During the full re-seed `backupd` sat at **173% CPU moving 7.5 files/sec**:
+not waiting on the network, but grinding sparsebundle band files over SMB.
+
+`Docker.raw` is the standout — a single 22 GB sparse image rewritten on every
+container run, so every *incremental* re-copies large chunks of it.
+
+`make report` lists what qualifies and emits a ready-to-paste command:
+
+```bash
+sudo tmutil addexclusion -p <paths>
+```
+
+`-p` makes the exclusion *sticky to the path*, so it survives the directory being
+deleted and recreated — which is exactly what caches do. Verify with
+`tmutil isexcluded <path>`; reverse with `sudo tmutil removeexclusion -p <path>`.
+
+The candidate list (`SC_TM_EXCLUDE_CANDIDATES` in `lib/common.zsh`) deliberately
+contains only things reconstructible from a registry, a lockfile, or a
+re-download. Anything a person might have hand-curated — Documents, Downloads,
+photo libraries — must never appear there, and the report asks you to review
+rather than offering to apply the change itself.
+
+This check is report-only, not in the guard: it is a one-time hygiene fix, and a
+notification about it every two hours would be noise rather than signal.
+
 Note `tmutil latestbackup` and `tmutil listbackups` require Full Disk Access,
 which a LaunchAgent does not have. `/Library/Preferences/com.apple.TimeMachine.plist`
 is world-readable, so the scripts read that instead and work unprivileged. When

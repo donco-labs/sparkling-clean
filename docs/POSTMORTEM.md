@@ -115,6 +115,22 @@ side by side.
    in both the report and the guard, reading the world-readable TM plist so it
    works unprivileged under launchd.
 
-8. **Threshold alerting beats forensics.** Every signal — jetsam events, disk-write
+8. **The re-seed exposed a second backup problem.** The 350 GB full backup ran
+   ~10 hours and was still at 62% the next morning. Not sleep, not a restart, not
+   power — throughput had collapsed from 21.9 MB/s to 1.4 MB/s while `backupd`
+   burned 173% CPU at 7.5 files/sec, grinding sparsebundle band files over SMB.
+   Wi-Fi was pristine throughout (-47 dBm, 1080 Mbps, 802.11ax).
+
+   Cause: 75 GB across eleven reconstructible directories — Docker images, Apple
+   container images, `.cache`, `.ollama`, toolchains — were being backed up, and
+   the file count that came with them is what a network destination actually
+   pays for. `Docker.raw` alone is a 22 GB sparse image rewritten on every
+   container run.
+
+   → `SC_TM_EXCLUDE_CANDIDATES` + `sc_tm_excluded` now flag this in the report,
+   emitting a ready-to-paste `tmutil addexclusion -p` command. Report-only by
+   design; it is a one-time fix, not something to notify about hourly.
+
+9. **Threshold alerting beats forensics.** Every signal — jetsam events, disk-write
    diags, falling free space — was present for days beforehand. Nothing was
    watching. → `disk-guard.zsh` + launchd.

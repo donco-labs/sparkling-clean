@@ -63,6 +63,10 @@ silently, for months. Check the age of the last *completed* backup:
 defaults read /Library/Preferences/com.apple.TimeMachine | sed -n '/SnapshotDates/,/);/p' | tail -3
 ```
 
+And a chain that *is* working can still be mostly garbage — `make report` flags
+large reconstructible directories (container images, package caches, toolchains)
+that are in every backup, and emits the `tmutil addexclusion` command to fix it.
+
 **4. Never `docker volume prune`.** A named volume reads as "dangling" the moment
 its container is removed, but it still holds your data. Volumes are a small share
 of Docker's footprint anyway; build cache and untagged images are where the space is.

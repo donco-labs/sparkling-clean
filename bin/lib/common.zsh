@@ -155,6 +155,41 @@ sc_tm_restore() {
   fi
 }
 
+# ------------------------------------------------- Time Machine exclusions --
+# A backup can be technically healthy and still be mostly garbage. Container
+# images, package caches and toolchains are all reconstructible from a registry
+# or a lockfile, but Time Machine copies them like anything else -- inflating
+# both the byte count and, worse, the FILE count that dominates a network
+# backup's cost. On the host this came from, ~60 GB of exactly this was going to
+# a NAS over Wi-Fi, with backupd burning 173% CPU at 7.5 files/sec.
+#
+# Docker.raw deserves special mention: one 22 GB sparse image, rewritten on every
+# container run, so every incremental re-copies large chunks of it.
+#
+# Only genuinely reconstructible paths belong here. Anything a user might have
+# hand-curated (documents, Downloads, photo libraries) must never be suggested.
+typeset -ga SC_TM_EXCLUDE_CANDIDATES=(
+  ~/Library/Containers/com.docker.docker
+  ~/Library/Application\ Support/com.apple.container
+  ~/Library/Containers/com.inferencer
+  ~/Library/Developer/Xcode/DerivedData
+  ~/Library/Developer/Xcode/iOS\ DeviceSupport
+  ~/Library/Caches
+  ~/.cache
+  ~/.gradle/caches
+  ~/.npm
+  ~/.ollama
+  ~/.rustup
+  ~/.konan
+  ~/.sdkman
+  ~/.pub-cache
+  ~/fvm
+)
+
+# tmutil isexcluded prints "[Excluded]  /path" or "[Included]  /path".
+# Works unprivileged, so this is safe from a LaunchAgent.
+sc_tm_excluded() { tmutil isexcluded "$1" 2>/dev/null | grep -q '^\[Excluded\]' }
+
 # --------------------------------------------------------------- execution --
 # Every destructive helper routes through here. SC_APPLY=0 (the default) prints
 # what would happen and touches nothing.
