@@ -219,6 +219,11 @@ Total copied: 2455.05 MB      Avg speed: 192.91 MB/min
 
 **About thirteen minutes, against ten and a half hours.**
 
+That first one still carried some pre-exclusion state. Once the full list was
+applied, the next four settled at **five to ten minutes** each — a routine
+incremental to a consumer NAS over Wi-Fi, which is what it should have been all
+along.
+
 And afterwards, for the first time in the whole exercise:
 
 ```
@@ -226,6 +231,24 @@ vm.swapusage: total = 5120.00M  used = 3408.25M
 ```
 
 The safety valve was working again.
+
+One more thing was quietly making it worse. Checking what held files open on the
+backup volume:
+
+```
+73 open handles  mds_store
+ 5 open handles  mds
+```
+
+Spotlight was indexing the backup destination — an 819 GB sparsebundle, over SMB.
+You cannot usefully Spotlight-search a Time Machine backup; it has its own browse
+interface. So this was pure competition for the same slow link, on every backup.
+
+Worth checking, and a trap inside a trap: `sudo mdutil -i off /Volumes/<backup>`
+does **not** disable it. It drops to `kMDConfigSearchLevelFSSearchOnly` and still
+reports `Indexing enabled`. The exclusion that actually works is System Settings
+→ Spotlight → Search Privacy, and the volume must be mounted when you add it —
+which for a network destination means during a backup.
 
 > **Takeaway.** Filter exclusion candidates by **file count**, not size. A 300 MB directory with 200,000 tiny files costs far more than 6 GB of model weights. And exclude subpaths deliberately — `~/.cargo/registry`, not `~/.cargo`, which holds credentials; `~/.m2/repository`, not `~/.m2`.
 
@@ -281,4 +304,5 @@ If #2 surprises you, this article did its job.
 
 ---
 
-*The toolkit is on GitHub: [sparkling-clean](https://github.com/donco-labs/sparkling-clean). It's macOS-only, it's been proven on exactly one machine, and the exclusion list is tuned to my toolchain — treat it as a starting point rather than gospel. The `docs/` directory has the full postmortem, including which mistake produced which line of code.*
+*The toolkit is on GitHub: [sparkling-clean](https://github.com/donco-labs/sparkling-clean),
+or `brew tap donco-labs/tap && brew install sparkling-clean`. It's macOS-only, it's been proven on exactly one machine, and the exclusion list is tuned to my toolchain — treat it as a starting point rather than gospel. The `docs/` directory has the full postmortem, including which mistake produced which line of code.*
