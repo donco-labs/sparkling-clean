@@ -172,6 +172,10 @@ typeset -ga SC_TM_EXCLUDE_CANDIDATES=(
   ~/Library/Containers/com.docker.docker
   ~/Library/Application\ Support/com.apple.container
   ~/Library/Containers/com.inferencer
+  # Claude Desktop's sandbox VM image. Same shape as Docker.raw: a handful of
+  # huge files rewritten on every run, so each incremental re-copies a large
+  # slice of 10 GB. The app recreates it; it holds runtime state, not documents.
+  ~/Library/Application\ Support/Claude/vm_bundles
   ~/Library/Developer/Xcode/DerivedData
   ~/Library/Developer/Xcode/iOS\ DeviceSupport
   ~/Library/Caches
