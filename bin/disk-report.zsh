@@ -49,6 +49,27 @@ else
   sc_info "re-enable: sudo tmutil enable"
 fi
 
+# Enabled != working. Age of the last COMPLETED backup is the real signal.
+local tm_days
+if tm_days=$(sc_tm_days_since_backup); then
+  local when=$(sc_tm_last_backup_human)
+  if   (( tm_days >= SC_TM_CRIT_D )); then
+    sc_crit "last completed backup $when — ${tm_days} days ago"
+    sc_info "a chain can fail silently for months; check Time Machine settings"
+  elif (( tm_days >= SC_TM_WARN_D )); then
+    sc_warn "last completed backup $when — ${tm_days} days ago"
+  else
+    sc_ok "last completed backup $when (${tm_days}d ago)"
+  fi
+else
+  sc_warn "last completed backup: UNKNOWN (could not read TM preferences)"
+fi
+
+if sc_tm_running; then
+  local prog=$(tmutil status 2>/dev/null | grep -oE 'Percent" = "[0-9.]+' | grep -oE '[0-9.]+$')
+  sc_info "backup RUNNING now$( [[ -n $prog ]] && printf ' (%.1f%%)' $(( prog * 100 )) )"
+fi
+
 (( brief )) && exit 0
 
 # ========================================================== 4. MEMORY =======

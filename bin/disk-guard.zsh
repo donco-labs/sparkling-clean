@@ -51,12 +51,27 @@ local snaps=$(sc_snapshot_count)
 # Backups silently left off — usually because a past cleanup paused them.
 sc_tm_enabled || notes+=("Time Machine auto-backup is OFF")
 
+# Enabled but not completing. This is the failure that hides for months: a full
+# disk purges TM's reference snapshot, every backup then fails, nothing is
+# surfaced. A running backup is not an excuse — only a COMPLETED one counts.
+local tm_days
+if tm_days=$(sc_tm_days_since_backup); then
+  if (( tm_days >= SC_TM_CRIT_D )); then
+    notes+=("no completed backup in ${tm_days} days")
+    level=CRIT; rc=2
+  elif (( tm_days >= SC_TM_WARN_D )); then
+    notes+=("last backup ${tm_days}d ago")
+  fi
+else
+  notes+=("backup age UNKNOWN")
+fi
+
 # The kernel's own distress signals in the last 3 days.
 local recent=$(find /Library/Logs/DiagnosticReports -maxdepth 1 -mtime -3 2>/dev/null \
                | grep -Eic 'jetsam|panic|watchdog' | tr -d ' ')
 (( recent > 0 )) && notes+=("$recent jetsam/panic report(s) in 3 days")
 
-if (( ${#notes} )) && [[ $level == OK ]]; then level=WARN; rc=1; fi
+if (( ${#notes} )) && [[ $level == OK ]]; then level=WARN; rc=1; fi   # never demotes CRIT
 (( ${#notes} )) && msg="$msg ${(j:; :)notes}."
 
 # ---- log always -------------------------------------------------------------

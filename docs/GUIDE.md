@@ -307,8 +307,51 @@ Thresholds default to 15% (warn) / 10% (critical). Override:
 SC_WARN_PCT=20 SC_CRIT_PCT=12 make check
 ```
 
-The guard also escalates to WARN on secondary signals: ≥5 local snapshots,
-Time Machine left off, or any jetsam/panic report in the last 3 days.
+The guard also escalates on secondary signals: ≥5 local snapshots, Time Machine
+left off, any jetsam/panic report in the last 3 days, and — the one that matters
+most — **a stale backup chain**.
+
+### "Enabled" is not "working"
+
+Time Machine can fail silently for months. The mechanism:
+
+```
+disk fills
+      ↓
+macOS purges the local snapshot TM uses as its incremental reference
+      ↓
+that snapshot goes "(dataless)" — listed, but holding no data
+      ↓
+TM has no valid baseline to diff against → every backup fails
+      ↓
+backupd retries hard (CPU-resource diags), adding to the I/O storm
+      ↓
+nothing is surfaced to the user
+```
+
+On the host this toolkit came from, that ran from 2026-05-23 to 2026-09-05 —
+**105 days with no completed backup**, while Settings showed Time Machine happily
+"on". Nine failed attempts on the final day alone.
+
+So the check is on the **age of the last completed backup**, not the on/off flag:
+
+```bash
+# Last completed backup — SnapshotDates, not AttemptDates
+defaults read /Library/Preferences/com.apple.TimeMachine \
+  | sed -n '/SnapshotDates/,/);/p' | tail -3
+```
+
+`AttemptDates` counts tries; `SnapshotDates` counts successes. Only the second
+one means anything.
+
+Thresholds `SC_TM_WARN_D` (2 days) and `SC_TM_CRIT_D` (7 days). A backup that is
+*currently running* does not clear the alert — only a completed one does.
+
+Note `tmutil latestbackup` and `tmutil listbackups` require Full Disk Access,
+which a LaunchAgent does not have. `/Library/Preferences/com.apple.TimeMachine.plist`
+is world-readable, so the scripts read that instead and work unprivileged. When
+the value cannot be read they report **UNKNOWN**, never OK — a check that reads
+healthy when it cannot tell is worse than no check.
 
 launchd rather than cron: launchd runs a missed interval on wake, so a sleeping
 laptop still gets checked, and it runs in the GUI session that notifications need.

@@ -35,6 +35,14 @@ tmutil listlocalsnapshots /
 sudo tmutil thinlocalsnapshots / 999999999999 4
 ```
 ```bash
+# Last COMPLETED backup. SnapshotDates = successes; AttemptDates = tries.
+# Works unprivileged; tmutil latestbackup needs Full Disk Access.
+defaults read /Library/Preferences/com.apple.TimeMachine | sed -n '/SnapshotDates/,/);/p' | tail -3
+```
+```bash
+tmutil status | grep -E "BackupPhase|Percent|TimeRemaining"
+```
+```bash
 # Pause TM during cleanup so it cannot re-pin deletions. ALWAYS re-enable.
 sudo tmutil disable
 sudo tmutil enable

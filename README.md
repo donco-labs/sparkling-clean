@@ -37,7 +37,7 @@ make install-guard   # launchd watchdog: checks every 2h, notifies on WARN/CRIT
 | `docs/REFERENCE.md` | Copy-paste command cheat sheet |
 | `docs/POSTMORTEM.md` | The incident, and which lesson became which line of code |
 
-## The three things worth knowing up front
+## The four things worth knowing up front
 
 **1. `df` is misleading on APFS.** Volumes share one container, so `Size` and
 `Avail` are container-wide and identical on every row — never sum them. `df -h`
@@ -55,7 +55,15 @@ blocks. Always finish with a thin — `reclaim.zsh` does it automatically:
 sudo tmutil thinlocalsnapshots / 999999999999 4
 ```
 
-**3. Never `docker volume prune`.** A named volume reads as "dangling" the moment
+**3. Time Machine being "on" does not mean it is working.** A full disk purges
+the local snapshot TM uses as its incremental reference; every backup then fails,
+silently, for months. Check the age of the last *completed* backup:
+
+```bash
+defaults read /Library/Preferences/com.apple.TimeMachine | sed -n '/SnapshotDates/,/);/p' | tail -3
+```
+
+**4. Never `docker volume prune`.** A named volume reads as "dangling" the moment
 its container is removed, but it still holds your data. Volumes are a small share
 of Docker's footprint anyway; build cache and untagged images are where the space is.
 

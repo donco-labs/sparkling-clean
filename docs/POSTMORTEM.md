@@ -98,6 +98,23 @@ side by side.
 6. **Exclude the cloud-sync parent, not the visible child.** Excluding `My Drive`
    left `Other computers/` and `.shortcut-targets-by-id/` indexed.
 
-7. **Threshold alerting beats forensics.** Every signal — jetsam events, disk-write
+7. **Time Machine had been dead for 105 days and said nothing.** `AttemptDates`
+   jumps 2026-05-23 → 2026-09-05; `SnapshotDates` (actual completed backups) ends
+   2026-07-06. `ReferenceLocalSnapshotDate` pointed at
+   `com.apple.TimeMachine.2026-07-06-094434.local` — the snapshot found marked
+   **`(dataless)`**: macOS had purged its contents under space pressure, leaving
+   TM with no baseline to diff against. Every backup since failed, retrying nine
+   times on the final day, burning CPU and I/O into the same storm. Settings
+   showed Time Machine "on" throughout.
+
+   Thinning that snapshot during cleanup forced TM to abandon the broken chain
+   and start a 350 GB full re-seed — the correct outcome, but note the chain was
+   already unusable before we touched it.
+
+   → `sc_tm_days_since_backup` now checks the age of the last *completed* backup
+   in both the report and the guard, reading the world-readable TM plist so it
+   works unprivileged under launchd.
+
+8. **Threshold alerting beats forensics.** Every signal — jetsam events, disk-write
    diags, falling free space — was present for days beforehand. Nothing was
    watching. → `disk-guard.zsh` + launchd.

@@ -90,6 +90,46 @@ sc_thin_snapshots() {
 }
 
 # ----------------------------------------------------------- Time Machine --
+# "Is TM enabled" is NOT the same question as "is TM working". A backup chain can
+# fail silently for months: if the disk fills, macOS purges the local snapshot TM
+# uses as its incremental reference, the reference goes "(dataless)", and every
+# subsequent backup fails with nothing surfaced to the user. That is exactly how
+# this host went 2026-05-23 -> 2026-09-05 with no completed backup. Check AGE.
+#
+# Source: /Library/Preferences/com.apple.TimeMachine.plist is world-readable, so
+# this works unprivileged under launchd. `tmutil latestbackup` does NOT -- it
+# needs Full Disk Access, which a LaunchAgent will not have.
+: ${SC_TM_WARN_D:=2}
+: ${SC_TM_CRIT_D:=7}
+
+sc_tm_running() { tmutil status 2>/dev/null | grep -q 'Running = 1' }
+
+# Epoch seconds of the last COMPLETED backup. Returns 1 if undeterminable --
+# callers must report "unknown", never assume healthy. A check that silently
+# reads OK when it cannot tell is worse than no check at all.
+sc_tm_last_backup_epoch() {
+  local d
+  d=$(defaults read /Library/Preferences/com.apple.TimeMachine 2>/dev/null \
+      | sed -n '/SnapshotDates/,/);/p' \
+      | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \+[0-9]{4}' \
+      | tail -1)
+  [[ -n $d ]] || return 1
+  date -j -f '%Y-%m-%d %H:%M:%S %z' "$d" '+%s' 2>/dev/null
+}
+
+sc_tm_days_since_backup() {
+  local e
+  e=$(sc_tm_last_backup_epoch) || return 1
+  [[ -n $e ]] || return 1
+  print -r -- $(( ( $(date +%s) - e ) / 86400 ))
+}
+
+sc_tm_last_backup_human() {
+  local e
+  e=$(sc_tm_last_backup_epoch) || { print -r -- "unknown"; return 1 }
+  date -r $e '+%Y-%m-%d %H:%M'
+}
+
 sc_tm_enabled() {
   local v=$(defaults read /Library/Preferences/com.apple.TimeMachine AutoBackup 2>/dev/null)
   [[ $v == 1 ]]
