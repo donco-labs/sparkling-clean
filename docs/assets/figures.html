@@ -1,0 +1,209 @@
+<title>Article figures — sparkling-clean</title>
+<style>
+  :root{
+    --surface-1:#fcfcfb; --ink:#0b0b0b; --ink-2:#52514e; --ink-3:#82817c;
+    --rule:#e3e2dd; --grid:#eeedea;
+    --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100;
+    --gray:#b9b8b2; --crit:#c0392b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#8a8a86;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+       -webkit-font-smoothing:antialiased}
+  .fig{width:1400px;margin:28px auto;background:var(--surface-1);padding:56px 64px;color:var(--ink)}
+  .cap{font-size:15px;color:var(--ink-3);letter-spacing:.09em;text-transform:uppercase;font-weight:600;margin:0 0 10px}
+  h2{font-size:38px;line-height:1.15;margin:0 0 8px;letter-spacing:-.02em;font-weight:700}
+  .sub{font-size:20px;color:var(--ink-2);margin:0 0 40px;max-width:78ch;line-height:1.45}
+  .note{font-size:16px;color:var(--ink-3);margin-top:34px;line-height:1.5}
+
+  /* ---------- flow chain ---------- */
+  .chain{display:flex;flex-direction:column;gap:0}
+  .step{display:flex;align-items:flex-start;gap:24px;padding:20px 26px;border-radius:10px;background:#f4f3f0}
+  .step.hot{background:#fdeeeb}
+  .step .n{flex:0 0 38px;height:38px;border-radius:50%;background:var(--ink);color:#fff;
+           display:flex;align-items:center;justify-content:center;font-weight:700;font-size:17px}
+  .step.hot .n{background:var(--crit)}
+  .step .t{font-size:23px;font-weight:650;line-height:1.3}
+  .step .d{font-size:17px;color:var(--ink-2);margin-top:5px;line-height:1.45}
+  .arrow{height:26px;margin-left:45px;border-left:3px solid var(--rule)}
+  .step.hot .t{color:var(--crit)}
+
+  /* ---------- bars ---------- */
+  .bars{display:flex;flex-direction:column;gap:18px}
+  .row{display:grid;grid-template-columns:210px 1fr 330px;align-items:center;gap:20px}
+  .row .lbl{font-size:19px;color:var(--ink-2);text-align:right;font-variant-numeric:tabular-nums}
+  .track{position:relative;height:44px;background:var(--grid);border-radius:4px}
+  .bar{position:absolute;left:0;top:0;bottom:0;border-radius:0 4px 4px 0;
+       box-shadow:0 0 0 2px var(--surface-1)}
+  .val{font-size:19px;font-weight:650;color:var(--ink);white-space:nowrap;font-variant-numeric:tabular-nums}
+  .val small{font-weight:500;color:var(--ink-3);font-size:16px}
+
+  /* ---------- two-panel rank inversion ---------- */
+  .panels{display:grid;grid-template-columns:1fr 1fr;gap:44px}
+  .panel h3{font-size:20px;margin:0 0 4px;font-weight:700}
+  .panel .ph{font-size:16px;color:var(--ink-3);margin:0 0 22px}
+  .prow{display:grid;grid-template-columns:13px 152px 1fr 108px;align-items:center;gap:11px;margin-bottom:14px}
+  .swatch{width:13px;height:13px;border-radius:3px}
+  .pname{font-size:17px;color:var(--ink-2);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .ptrack{position:relative;height:30px;background:var(--grid);border-radius:4px}
+  .pbar{position:absolute;left:0;top:0;bottom:0;border-radius:0 4px 4px 0;box-shadow:0 0 0 2px var(--surface-1)}
+  .pval{font-size:16px;font-weight:650;color:var(--ink);white-space:nowrap;
+        font-variant-numeric:tabular-nums;text-align:right}
+
+  /* ---------- timeline ---------- */
+  .tl{position:relative;height:150px;margin:20px 0 8px}
+  .axis{position:absolute;left:0;right:0;top:78px;height:3px;background:var(--rule)}
+  .tick{position:absolute;top:60px;width:5px;height:38px;border-radius:3px;background:var(--s1)}
+  .tick.late{background:var(--s3)}
+  .gap{position:absolute;top:44px;height:70px;background:#fdeeeb;border-radius:8px;
+       border:2px dashed #eab5ac}
+  .gaplab{position:absolute;top:0;width:100%;text-align:center;font-size:21px;font-weight:700;color:var(--crit)}
+  .gapsub{position:absolute;top:29px;width:100%;text-align:center;font-size:16px;color:#a8503f}
+  .tlab{position:absolute;top:124px;font-size:16px;color:var(--ink-3);transform:translateX(-50%);white-space:nowrap}
+
+  /* ---------- scoreboard ---------- */
+  .score{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;background:var(--rule)}
+  .cell{background:var(--surface-1);padding:30px 26px}
+  .cell .k{font-size:16px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.08em;font-weight:600}
+  .cell .before{font-size:26px;color:var(--ink-3);margin-top:16px;text-decoration:line-through;
+                text-decoration-thickness:2px;font-variant-numeric:tabular-nums}
+  .cell .after{font-size:44px;font-weight:700;margin-top:6px;letter-spacing:-.02em;
+               font-variant-numeric:tabular-nums;line-height:1.05}
+  .cell.good .after{color:var(--s3)}
+  .legend{display:flex;gap:26px;margin-bottom:26px;flex-wrap:wrap}
+  .lgi{display:flex;align-items:center;gap:9px;font-size:17px;color:var(--ink-2)}
+  .lgs{width:14px;height:14px;border-radius:3px}
+</style>
+
+<!-- ============================ FIGURE 1 ============================ -->
+<div class="fig" id="fig-chain">
+  <p class="cap">Figure 1 · The failure chain</p>
+  <h2>A full disk becomes a frozen machine</h2>
+  <p class="sub">Nothing here is a hardware fault. Each step is ordinary behaviour; the damage is
+    in the sequence — and it only starts once free space runs out.</p>
+  <div class="chain">
+    <div class="step"><div class="n">1</div><div><div class="t">The disk passes ~90% full</div>
+      <div class="d">On this machine: 36.6 GB free of 494 GB.</div></div></div>
+    <div class="arrow"></div>
+    <div class="step hot"><div class="n">2</div><div><div class="t">macOS can no longer grow a swapfile</div>
+      <div class="d">Swap lives on the same volume. <code>vm.swapusage</code> reads
+        <strong>total = 0.00M</strong> — which looks healthy in isolation.</div></div></div>
+    <div class="arrow"></div>
+    <div class="step"><div class="n">3</div><div><div class="t">Memory pressure loses its relief valve</div>
+      <div class="d">23 GB of 24 GB in use, and nowhere to page out to.</div></div></div>
+    <div class="arrow"></div>
+    <div class="step"><div class="n">4</div><div><div class="t">The page cache evicts executables and mapped files</div>
+      <div class="d">They are needed again immediately, so they are read straight back from the SSD.</div></div></div>
+    <div class="arrow"></div>
+    <div class="step hot"><div class="n">5</div><div><div class="t">Sustained ~1 GB/s of reads — pagein thrash</div>
+      <div class="d">1,043,671 pageins against 6,233 pageouts, in a 16-minute uptime.</div></div></div>
+    <div class="arrow"></div>
+    <div class="step hot"><div class="n">6</div><div><div class="t">The kernel stalls on I/O — watchdog timeouts and app kills</div>
+      <div class="d">Which is where you notice, and where you start blaming the drive.</div></div></div>
+  </div>
+  <p class="note"><strong>Swap at zero is not a problem.</strong> Swap at zero <em>while RAM is
+    saturated and the disk is nearly full</em> is the failure.</p>
+</div>
+
+<!-- ============================ FIGURE 2 ============================ -->
+<div class="fig" id="fig-ratio">
+  <p class="cap">Figure 2 · What SMART actually said</p>
+  <h2>Reads ran at nearly three times writes</h2>
+  <p class="sub">Every health field on the drive was perfect. The lifetime counters were not —
+    and the ratio between them is the diagnosis.</p>
+  <div class="bars">
+    <div class="row"><div class="lbl">Data read</div>
+      <div class="track"><div class="bar" style="width:100%;background:var(--s1)"></div></div>
+      <div class="val">39.5 TB <small>· 90 GB/hour</small></div></div>
+    <div class="row"><div class="lbl">Data written</div>
+      <div class="track"><div class="bar" style="width:34.9%;background:var(--gray)"></div></div>
+      <div class="val">13.8 TB</div></div>
+  </div>
+  <p class="note">Across 438 powered-on hours. Heavy <em>writing</em> means a busy machine.
+    Heavy <em>reading</em> at three times your write volume means the same data being read over and
+    over — the signature of pagein thrash, not of a dying disk.</p>
+</div>
+
+<!-- ============================ FIGURE 3 ============================ -->
+<div class="fig" id="fig-inversion">
+  <p class="cap">Figure 3 · Why backups cost what they cost</p>
+  <h2>The ranking inverts when you count files instead of bytes</h2>
+  <p class="sub">On a network destination every file is a round-trip — going in, and again when the
+    backup is later thinned. The biggest directories are not the expensive ones.</p>
+  <div class="legend">
+    <div class="lgi"><span class="lgs" style="background:var(--s1)"></span>~/.cache</div>
+    <div class="lgi"><span class="lgs" style="background:var(--s2)"></span>Docker image</div>
+    <div class="lgi"><span class="lgs" style="background:var(--s3)"></span>~/.ollama</div>
+    <div class="lgi"><span class="lgs" style="background:var(--s4)"></span>~/.pub-cache</div>
+  </div>
+  <div class="panels">
+    <div class="panel">
+      <h3>Ranked by size</h3><p class="ph">what you would think to exclude</p>
+      <div class="prow"><span class="swatch" style="background:var(--s2)"></span><span class="pname">Docker image</span>
+        <span class="ptrack"><span class="pbar" style="width:100%;background:var(--s2)"></span></span><span class="pval">24.1 GB</span></div>
+      <div class="prow"><span class="swatch" style="background:var(--s1)"></span><span class="pname">~/.cache</span>
+        <span class="ptrack"><span class="pbar" style="width:36.5%;background:var(--s1)"></span></span><span class="pval">8.8 GB</span></div>
+      <div class="prow"><span class="swatch" style="background:var(--s3)"></span><span class="pname">~/.ollama</span>
+        <span class="ptrack"><span class="pbar" style="width:27.4%;background:var(--s3)"></span></span><span class="pval">6.6 GB</span></div>
+      <div class="prow"><span class="swatch" style="background:var(--s4)"></span><span class="pname">~/.pub-cache</span>
+        <span class="ptrack"><span class="pbar" style="width:5%;background:var(--s4)"></span></span><span class="pval">1.2 GB</span></div>
+    </div>
+    <div class="panel">
+      <h3>Ranked by file count</h3><p class="ph">what actually costs you</p>
+      <div class="prow"><span class="swatch" style="background:var(--s1)"></span><span class="pname">~/.cache</span>
+        <span class="ptrack"><span class="pbar" style="width:100%;background:var(--s1)"></span></span><span class="pval">107,760</span></div>
+      <div class="prow"><span class="swatch" style="background:var(--s4)"></span><span class="pname">~/.pub-cache</span>
+        <span class="ptrack"><span class="pbar" style="width:56.9%;background:var(--s4)"></span></span><span class="pval">61,296</span></div>
+      <div class="prow"><span class="swatch" style="background:var(--s2)"></span><span class="pname">Docker image</span>
+        <span class="ptrack"><span class="pbar" style="width:0.9%;background:var(--s2)"></span></span><span class="pval">148</span></div>
+      <div class="prow"><span class="swatch" style="background:var(--s3)"></span><span class="pname">~/.ollama</span>
+        <span class="ptrack"><span class="pbar" style="width:0.4%;background:var(--s3)"></span></span><span class="pval">29</span></div>
+    </div>
+  </div>
+  <p class="note"><strong>~/.ollama is five times larger than ~/.pub-cache and roughly two thousand
+    times cheaper to back up.</strong> Big sequential blobs stream; tiny files each pay the latency.</p>
+</div>
+
+<!-- ============================ FIGURE 4 ============================ -->
+<div class="fig" id="fig-timeline">
+  <p class="cap">Figure 4 · Completed backups, 2026</p>
+  <h2>Sixty-two days of silence, with Time&nbsp;Machine switched on</h2>
+  <p class="sub">Each mark is a backup that finished. Settings reported “Time Machine: On”
+    across the entire gap, and never said otherwise.</p>
+  <div class="tl">
+    <div class="axis"></div>
+    <div class="tick" style="left:4%"></div><div class="tlab" style="left:4%">May 24</div>
+    <div class="tick" style="left:11%"></div>
+    <div class="tick" style="left:19%"></div><div class="tlab" style="left:19%">Jun 9–10</div>
+    <div class="tick" style="left:27%"></div>
+    <div class="tick" style="left:29%"></div>
+    <div class="tick" style="left:31%"></div><div class="tlab" style="left:31%">Jul 4–6</div>
+    <div class="gap" style="left:36%;right:12%"></div>
+    <div class="gap" style="left:36%;right:12%;background:none;border:none">
+      <div class="gaplab">62 days · zero completed backups</div>
+      <div class="gapsub">nine failed attempts on the final day alone</div>
+    </div>
+    <div class="tick late" style="left:89%"></div>
+    <div class="tick late" style="left:91%"></div>
+    <div class="tick late" style="left:93%"></div>
+    <div class="tick late" style="left:95%"></div><div class="tlab" style="left:93%">Sep 6</div>
+  </div>
+  <p class="note">The cause was the same full disk: macOS purged the local snapshot Time Machine
+    uses as its incremental reference. It stayed in the list marked <code>(dataless)</code> — present,
+    holding nothing — so every backup after it failed for want of a baseline.</p>
+</div>
+
+<!-- ============================ FIGURE 5 ============================ -->
+<div class="fig" id="fig-scoreboard">
+  <p class="cap">Figure 5 · Twenty-four hours later</p>
+  <h2>Same machine, same hardware</h2>
+  <p class="sub">No parts replaced. The SSD reported 0 media errors and 0% endurance used
+    throughout.</p>
+  <div class="score">
+    <div class="cell good"><div class="k">Free space</div><div class="before">36.6 GB</div><div class="after">116.7 GB</div></div>
+    <div class="cell good"><div class="k">Swap available</div><div class="before">0 MB</div><div class="after">3,072 MB</div></div>
+    <div class="cell good"><div class="k">Last backup</div><div class="before">62 days</div><div class="after">Today</div></div>
+    <div class="cell good"><div class="k">Backup duration</div><div class="before">10.5 hrs</div><div class="after">5–10 min</div></div>
+  </div>
+  <p class="note">The backup figure is the full re-seed against a routine incremental, after
+    75 GB of reconstructible caches were excluded from the backup set.</p>
+</div>
