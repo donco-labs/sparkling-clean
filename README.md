@@ -8,10 +8,19 @@ reads and watchdog freezes. The SSD was healthy. The disk being 93% full was the
 cause — macOS could not grow a swapfile, so RAM pressure turned into pagein
 thrash and jetsam kills. Full writeup: [docs/POSTMORTEM.md](docs/POSTMORTEM.md).
 
+## Install
+
+```bash
+brew tap donco-labs/tap
+brew install sparkling-clean
+```
+
+Or clone and use `make` directly — the repo works without installing.
+
 ## Quick start
 
 ```bash
-make report          # what is going on — read-only, changes nothing
+sparkling-clean report   # or: make report          # what is going on — read-only, changes nothing
 ```
 ```bash
 make dry             # what a cleanup would free — removes nothing
@@ -22,6 +31,22 @@ make clean-safe      # reclaim caches that regenerate silently
 ```bash
 make install-guard   # launchd watchdog: checks every 2h, notifies on WARN/CRIT
 ```
+
+### Menu bar
+
+```bash
+brew install --cask swiftbar
+ln -s "$PWD/extra/swiftbar/sparkling-clean.10m.sh" ~/Library/Application\ Support/SwiftBar/
+```
+
+Shows nothing but an icon when healthy; colours the title by the worst check when
+not. Reads the guard's `--json` (0.4 s) rather than the full report (tens of
+seconds), so it is cheap to refresh.
+
+Deliberately not a bundled app: `tmutil addexclusion` needs Full Disk Access,
+snapshot thinning needs root, and a DMG needs Developer ID notarization to avoid
+Gatekeeper. SwiftBar is already notarized and brew-installable, so this is ten
+lines of config instead of a signing pipeline.
 
 ## Make targets
 
