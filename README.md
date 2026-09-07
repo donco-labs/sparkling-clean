@@ -81,6 +81,14 @@ On first launch SwiftBar asks which folder to use — point it at that one. It i
 notarized but ships quarantined, so macOS shows its standard first-run dialog;
 approve it in System Settings → Privacy & Security → Open Anyway.
 
+The dropdown also carries a **Watchlist** — the directories where space actually
+accumulates, biggest first, with `~/Downloads` and the toolchain caches included.
+Sizing them costs about ten seconds of directory walking, so it is cached and
+refreshed roughly twice a day by the background guard rather than measured on
+every render: a disk monitor that generated sustained I/O would be causing the
+problem it exists to detect. The numbers are up to half a day old, which is the
+right resolution for watching creep.
+
 Shows a monochrome SF Symbol and nothing else when healthy — a template image, so
 it follows the menu bar appearance like any native item. Severity is weight rather
 than a different symbol: `internaldrive` when healthy, filled on a warning, and

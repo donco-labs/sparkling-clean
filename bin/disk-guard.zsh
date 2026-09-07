@@ -31,6 +31,15 @@ mkdir -p $SC_STATE_DIR
 
 sc_run_health_checks
 
+# Sizing the watchlist costs ~10s of directory walking. The guard runs every two
+# hours; the cache is half-day stale at most, so this actually does work about
+# twice a day. Detached and niced so it never delays a check or competes with
+# anything the user is doing — a disk monitor that generates sustained I/O is
+# the problem it exists to find.
+if sc_sizes_stale; then
+  ( nice -n 15 zsh -c "source ${0:A:h}/lib/common.zsh; sc_sizes_refresh" >/dev/null 2>&1 & ) &!
+fi
+
 local level=$(sc_overall_level) rc=0
 case $level in (CRIT) rc=2 ;; (WARN) rc=1 ;; esac
 

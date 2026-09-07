@@ -151,6 +151,28 @@ if [[ -x $cli ]]; then
   print -r -- "Full report (~40s, asks for sudo)… | bash=${cli} param1=report terminal=true"
 fi
 print -r -- "Refresh | refresh=true"
+
+# Where the space actually lives. Read from the cache rather than measured here
+# — see sc_sizes_refresh for why a menu bar item must not walk 100k-entry trees
+# every ten minutes. Numbers are up to half a day old, which is the right
+# resolution for watching creep.
+local sizes=$(sc_sizes_read 2>/dev/null)
+if [[ -n $sizes ]]; then
+  local age=$(sc_sizes_age_hours)
+  local when="${age}h ago"; (( age < 1 )) && when="just now"
+  print -r -- "---"
+  print -r -- "Watchlist · measured ${when}"
+  local shown=0
+  print -r -- "$sizes" | while IFS=$'\t' read -r b pth; do
+    (( shown++ >= 8 )) && continue
+    printf -- '--%10s  %s\n' "$(sc_human $b)" "${pth/#$HOME/~}"
+  done
+  local tot=$(print -r -- "$sizes" | awk -F'\t' '{s+=$1} END{print s+0}')
+  local cnt=$(print -r -- "$sizes" | grep -c .)
+  print -r -- "-----"
+  print -r -- "--$(sc_human $tot) across ${cnt} watched directories | color=gray"
+  print -r -- "--Caches and images regrow; watch the shape, not the total. | color=gray"
+fi
 print -r -- "---"
 # Version comes from the Homebrew Cellar path the symlink resolves to, so it is
 # always the version actually running rather than one baked in at build time.

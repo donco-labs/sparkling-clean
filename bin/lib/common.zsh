@@ -366,6 +366,49 @@ sc_run_health_checks() {
   fi
 }
 
+# --------------------------------------------------------------- watchlist --
+# Directories worth watching for creep. A SUPERSET of the exclusion candidates:
+# it includes user data like ~/Downloads that should be watched but must never
+# be suggested for exclusion, so the two lists stay separate on purpose.
+typeset -ga SC_WATCH_PATHS=(
+  $SC_TM_EXCLUDE_CANDIDATES
+  ~/Downloads
+  ~/models
+  ~/.gradle
+  ~/Library/Developer/Xcode
+)
+
+# Sizing this set costs ~10s of directory walking — fine twice a day, absurd
+# every ten minutes. A menu bar item that generated sustained metadata I/O would
+# be causing the exact problem this toolkit exists to detect. So: cache it, and
+# refresh only when stale. Creep happens over days; half-day-old numbers are
+# entirely adequate for spotting it.
+: ${SC_SIZES_CACHE:=$SC_STATE_DIR/sizes.tsv}
+: ${SC_SIZES_MAX_AGE_H:=12}
+
+sc_sizes_age_hours() {
+  [[ -r $SC_SIZES_CACHE ]] || { print -r -- 9999; return }
+  local m=$(stat -f %m "$SC_SIZES_CACHE" 2>/dev/null)
+  [[ -n $m ]] && print -r -- $(( ( $(date +%s) - m ) / 3600 )) || print -r -- 9999
+}
+
+sc_sizes_stale() { (( $(sc_sizes_age_hours) >= SC_SIZES_MAX_AGE_H )) }
+
+# Writes "<bytes>\t<path>" for everything that exists, biggest first.
+sc_sizes_refresh() {
+  mkdir -p ${SC_SIZES_CACHE:h}
+  local tmp=${SC_SIZES_CACHE}.$$
+  local c sz
+  for c in $SC_WATCH_PATHS; do
+    [[ -e $c ]] || continue
+    sz=$(sc_size_of $c)
+    (( sz > 0 )) && printf '%s\t%s\n' "$sz" "$c"
+  done | sort -rn > $tmp
+  mv -f $tmp $SC_SIZES_CACHE
+}
+
+sc_sizes_read() { [[ -r $SC_SIZES_CACHE ]] && cat $SC_SIZES_CACHE }
+
 # ----------------------------------------------------------------- trends --
 # The guard logs free bytes on every run, so a point-in-time check becomes a
 # trend for free. This is the view that would have caught the original incident
