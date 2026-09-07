@@ -109,7 +109,7 @@ The subtle part is the swap reading. `vm.swapusage: total = 0.00M` looks *health
 
 > **Takeaway.** Swap at zero is not a problem. Swap at zero **while RAM is saturated and the disk is nearly full** is the failure: macOS cannot create the swapfile it needs, so memory pressure goes straight to app kills. There was a `JetsamEvent` in `/Library/Logs/DiagnosticReports/` from earlier that day confirming it.
 
-Also worth knowing: `PhysMem: 23G used, 259M unused` is **normal** on macOS. It uses all RAM as cache. Judge pressure by jetsam events, compressor size, and swap behaviour — never by "unused".
+And `23G used, 259M unused` from that same dump is **normal** on macOS — it uses all RAM as cache. Judge pressure by jetsam events, compressor size and swap behaviour, never by "unused".
 
 ## Deleting 9 GB and freeing nothing
 
@@ -145,7 +145,7 @@ Then Docker Desktop did something I didn't expect. Its backend had been idle, an
 
 That taught me two things. Pruning frees space *inside* the VM; only a clean Docker Desktop shutdown shrinks the host-side file. And the transient `500 Internal Server Error` responses I'd seen from the Docker API were teardown, not a wedged daemon. I had been one impatient `kill -9` away from leaving the VM's filesystem dirty — with my Postgres volumes inside it.
 
-Total reclaimed that night: **36.6 GB → 121.4 GB free.** Load average fell from 10.76 to 2.29.
+By the end of that night: **36.6 GB → 121.4 GB free.** Load average fell from 10.76 to 2.29. (It settles at 116.7 GB a day later, once the backup below has run and taken its own snapshots.)
 
 ---
 
@@ -260,7 +260,41 @@ which for a network destination means during a backup.
 
 Every signal was present for days beforehand. Jetsam events, macOS's own excessive-disk-write reports, free space falling. Nothing was watching.
 
-So I wrote a small toolkit — a read-only diagnostic, a tiered reclaimer that's dry-run by default, and a launchd agent that checks every two hours. Roughly a thousand lines of zsh. The interesting part wasn't the scripts; it was getting the *alerting* right, and I got it wrong twice first.
+So I wrote one. `sparkling-clean` is about a thousand lines of zsh with no runtime dependencies — a read-only diagnostic, a tiered reclaimer that is dry-run by default, and a launchd agent that checks every two hours and stays silent unless something changes.
+
+The diagnostic ends with the answer rather than making you assemble it:
+
+```
+== Verdict ==
+  OK    Disk       22% free
+  OK    Backups    enabled
+  OK    Backup     0d ago
+  OK    Snapshots  2
+  note  4 kernel report(s) in the last 3 days — none from memory exhaustion
+
+OK    healthy
+```
+
+Every check in it exists because this incident hid behind the absence of it. The
+backup-age check is the one I would install on someone else's machine unasked.
+
+It also names what is in your backups that should not be, sorted by the metric
+that actually costs — and hands you the command:
+
+```
+WARN  75.4 GB / 104,849 files of rebuildable data in every backup:
+        24.1 GB        148 files  ~/Library/Containers/com.docker.docker
+         8.8 GB    107,760 files  ~/.cache
+         1.2 GB     61,296 files  ~/.pub-cache
+      …
+        sudo tmutil addexclusion -p …
+```
+
+That list is versioned in the repo, so a rebuilt machine gets the same policy from
+one command instead of a memory of which caches were safe.
+
+The interesting part wasn't the scripts, though. It was getting the *alerting*
+right, and I got it wrong twice first.
 
 **Mistake one: history escalating current state.** I treated jetsam reports as an alerting signal. After the disk was fixed, the guard kept reporting WARN for three days over kills that had already stopped — precisely when a monitor most needs to go quiet. Now there are two tiers: *checks* are current conditions and escalate; *notes* are historical context and never do.
 
@@ -308,5 +342,35 @@ If #2 surprises you, this article did its job.
 
 ---
 
-*The toolkit is on GitHub: [sparkling-clean](https://github.com/donco-labs/sparkling-clean),
-or `brew tap donco-labs/tap && brew install sparkling-clean`. It's macOS-only, it's been proven on exactly one machine, and the exclusion list is tuned to my toolchain — treat it as a starting point rather than gospel. The `docs/` directory has the full postmortem, including which mistake produced which line of code.*
+## Getting it
+
+```bash
+brew tap donco-labs/tap
+brew trust --formula donco-labs/tap/sparkling-clean
+brew install sparkling-clean
+```
+
+(Homebrew 6 refuses formulae from third-party taps until you trust them. The
+formula is thirty lines and copies scripts into `libexec`; read it first, which is
+the point of the gate.)
+
+Then:
+
+```bash
+sparkling-clean report          # the diagnostic above
+sparkling-clean install-guard   # the watchdog, every 2h
+sparkling-clean reclaim         # dry-run; --apply to actually reclaim
+```
+
+Every destructive path is dry-run until you pass `--apply`, real data is reported
+and never deleted, and pausing Time Machine is restored by a trap so an
+interrupted run cannot leave a machine unbacked-up. It is macOS-only, it has been
+proven on exactly one machine, and the exclusion list is tuned to my toolchain —
+treat it as a starting point rather than gospel.
+
+The repo's `docs/` directory carries the full postmortem: twelve lessons, each
+naming which mistake produced which line of code, including the four theories that
+turned out wrong. If you only read one, read the one about a monitor that reports
+healthy when it cannot tell.
+
+**[github.com/donco-labs/sparkling-clean](https://github.com/donco-labs/sparkling-clean)**

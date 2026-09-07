@@ -175,7 +175,7 @@
 <header>
   <div class="status">
     <span class="chip live">Draft · not published</span>
-    <span class="chip">2,597 words</span>
+    <span class="chip">2,916 words</span>
     <span class="chip">5 figures</span>
     <span class="chip">Target: Medium</span>
   </div>
@@ -294,7 +294,7 @@ they are re-read from SSD immediately   ← the 1 GB/s
 kernel stalls on I/O → watchdog timeout → jetsam kills your apps</code></pre>
 <p>The subtle part is the swap reading. <code>vm.swapusage: total = 0.00M</code> looks <em>healthy</em> in isolation — plenty of people run for weeks without touching swap.</p>
 <aside class="take"><strong>Takeaway.</strong> Swap at zero is not a problem. Swap at zero <strong>while RAM is saturated and the disk is nearly full</strong> is the failure: macOS cannot create the swapfile it needs, so memory pressure goes straight to app kills. There was a <code>JetsamEvent</code> in <code>/Library/Logs/DiagnosticReports/</code> from earlier that day confirming it.</aside>
-<p>Also worth knowing: <code>PhysMem: 23G used, 259M unused</code> is <strong>normal</strong> on macOS. It uses all RAM as cache. Judge pressure by jetsam events, compressor size, and swap behaviour — never by "unused".</p>
+<p>And <code>23G used, 259M unused</code> from that same dump is <strong>normal</strong> on macOS — it uses all RAM as cache. Judge pressure by jetsam events, compressor size and swap behaviour, never by "unused".</p>
 <h2>Deleting 9 GB and freeing nothing</h2>
 <p>I started clearing caches. Cleared 8.9 GB of Homebrew downloads. Re-checked free space.</p>
 <p>It hadn't moved. Not "moved a little." Zero.</p>
@@ -310,7 +310,7 @@ $ du -h Docker.raw
 <p><code>ls -lh</code> reports logical size. <code>Docker.raw</code> is sparse — 460 GB is the ceiling it may grow to, not what it occupies. Always <code>du</code> for disk images, VM bundles, and database files.</p>
 <p>Then Docker Desktop did something I didn't expect. Its backend had been idle, and while I was poking at it, macOS's Resource Saver stopped the VM. On the way out, Docker <strong>compacted the image</strong>: 42 GB → 22 GB. Twenty gigabytes reclaimed by an app shutting down cleanly.</p>
 <p>That taught me two things. Pruning frees space <em>inside</em> the VM; only a clean Docker Desktop shutdown shrinks the host-side file. And the transient <code>500 Internal Server Error</code> responses I'd seen from the Docker API were teardown, not a wedged daemon. I had been one impatient <code>kill -9</code> away from leaving the VM's filesystem dirty — with my Postgres volumes inside it.</p>
-<p>Total reclaimed that night: <strong>36.6 GB → 121.4 GB free.</strong> Load average fell from 10.76 to 2.29.</p>
+<p>By the end of that night: <strong>36.6 GB → 121.4 GB free.</strong> Load average fell from 10.76 to 2.29. (It settles at 116.7 GB a day later, once the backup below has run and taken its own snapshots.)</p>
 <hr>
 <h2>Then I checked when my last backup finished</h2>
 <figure class="plate"><div class="fig">
@@ -419,7 +419,26 @@ $ du -h Docker.raw
 <aside class="take"><strong>Takeaway.</strong> Filter exclusion candidates by <strong>file count</strong>, not size. A 300 MB directory with 200,000 tiny files costs far more than 6 GB of model weights. And exclude subpaths deliberately — <code>~/.cargo/registry</code>, not <code>~/.cargo</code>, which holds credentials; <code>~/.m2/repository</code>, not <code>~/.m2</code>.</aside>
 <h2>What I built, and what it taught me about monitoring</h2>
 <p>Every signal was present for days beforehand. Jetsam events, macOS's own excessive-disk-write reports, free space falling. Nothing was watching.</p>
-<p>So I wrote a small toolkit — a read-only diagnostic, a tiered reclaimer that's dry-run by default, and a launchd agent that checks every two hours. Roughly a thousand lines of zsh. The interesting part wasn't the scripts; it was getting the <em>alerting</em> right, and I got it wrong twice first.</p>
+<p>So I wrote one. <code>sparkling-clean</code> is about a thousand lines of zsh with no runtime dependencies — a read-only diagnostic, a tiered reclaimer that is dry-run by default, and a launchd agent that checks every two hours and stays silent unless something changes.</p>
+<p>The diagnostic ends with the answer rather than making you assemble it:</p>
+<pre class="term"><code>== Verdict ==
+  OK    Disk       22% free
+  OK    Backups    enabled
+  OK    Backup     0d ago
+  OK    Snapshots  2
+  note  4 kernel report(s) in the last 3 days — none from memory exhaustion
+
+OK    healthy</code></pre>
+<p>Every check in it exists because this incident hid behind the absence of it. The backup-age check is the one I would install on someone else's machine unasked.</p>
+<p>It also names what is in your backups that should not be, sorted by the metric that actually costs — and hands you the command:</p>
+<pre class="term"><code>WARN  75.4 GB / 104,849 files of rebuildable data in every backup:
+        24.1 GB        148 files  ~/Library/Containers/com.docker.docker
+         8.8 GB    107,760 files  ~/.cache
+         1.2 GB     61,296 files  ~/.pub-cache
+      …
+        sudo tmutil addexclusion -p …</code></pre>
+<p>That list is versioned in the repo, so a rebuilt machine gets the same policy from one command instead of a memory of which caches were safe.</p>
+<p>The interesting part wasn't the scripts, though. It was getting the <em>alerting</em> right, and I got it wrong twice first.</p>
 <p><strong>Mistake one: history escalating current state.</strong> I treated jetsam reports as an alerting signal. After the disk was fixed, the guard kept reporting WARN for three days over kills that had already stopped — precisely when a monitor most needs to go quiet. Now there are two tiers: <em>checks</em> are current conditions and escalate; <em>notes</em> are historical context and never do.</p>
 <p><strong>Mistake two: naming the wrong subsystem.</strong> Every notification title was hardcoded <code>"Disk ${level}"</code> and the message body was built entirely from the disk branch. So the stale-backup alert announced itself as <strong>"Disk CRIT: 22% free"</strong> on a machine with 121 GB free — naming the wrong problem and contradicting its own threshold in the same sentence. Now each check owns its verdict and its wording, and the alert names the subsystem that's actually unhealthy.</p>
 <p><strong>A third, subtler one:</strong> not all <code>JetsamEvent</code>s mean the same thing. <code>per-process-limit</code> is one process hitting its own ceiling — routine. <code>vm-pageshortage</code> is real memory exhaustion. Counting them together cries wolf over normal housekeeping. And my first classifier used <code>sudo -n grep</code>, which fails whenever a password is required — so it would have reported "no memory events" forever, silently, with no way to tell that answer apart from the truth.</p>
@@ -455,7 +474,18 @@ tmutil listlocalsnapshots /</code></pre>
 tmutil isexcluded ~/.cache</code></pre>
 <p>If #2 surprises you, this article did its job.</p>
 <hr>
-<p class="dek">The toolkit is on GitHub: <a href="https://github.com/donco-labs/sparkling-clean">sparkling-clean</a>, or <code>brew tap donco-labs/tap &amp;&amp; brew install sparkling-clean</code>. It's macOS-only, it's been proven on exactly one machine, and the exclusion list is tuned to my toolchain — treat it as a starting point rather than gospel. The <code>docs/</code> directory has the full postmortem, including which mistake produced which line of code.</p>
+<h2>Getting it</h2>
+<pre class="term"><code>brew tap donco-labs/tap
+brew trust --formula donco-labs/tap/sparkling-clean
+brew install sparkling-clean</code></pre>
+<p>(Homebrew 6 refuses formulae from third-party taps until you trust them. The formula is thirty lines and copies scripts into <code>libexec</code>; read it first, which is the point of the gate.)</p>
+<p>Then:</p>
+<pre class="term"><code>sparkling-clean report          # the diagnostic above
+sparkling-clean install-guard   # the watchdog, every 2h
+sparkling-clean reclaim         # dry-run; --apply to actually reclaim</code></pre>
+<p>Every destructive path is dry-run until you pass <code>--apply</code>, real data is reported and never deleted, and pausing Time Machine is restored by a trap so an interrupted run cannot leave a machine unbacked-up. It is macOS-only, it has been proven on exactly one machine, and the exclusion list is tuned to my toolchain — treat it as a starting point rather than gospel.</p>
+<p>The repo's <code>docs/</code> directory carries the full postmortem: twelve lessons, each naming which mistake produced which line of code, including the four theories that turned out wrong. If you only read one, read the one about a monitor that reports healthy when it cannot tell.</p>
+<p><strong><a href="https://github.com/donco-labs/sparkling-clean">github.com/donco-labs/sparkling-clean</a></strong></p>
 </main>
 <footer>
   Draft for review. The toolkit described here is at
