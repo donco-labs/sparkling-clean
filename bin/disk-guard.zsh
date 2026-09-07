@@ -54,7 +54,9 @@ local msg="${(j: :)lines}"
 (( ${#SC_NOTES} )) && msg="$msg  [${(j:; :)SC_NOTES}]"
 
 # ---- log always -------------------------------------------------------------
-sc_log "guard $level subject=$subject headline=\"$headline\" notes=${(j:,:)SC_NOTES}"
+# free= and pct= are what make a trend possible later; the per-check refactor
+# dropped them and the history quietly stopped accumulating.
+sc_log "guard $level pct=$(sc_pct_free) free=$(sc_free_bytes) subject=$subject headline=\"$headline\" notes=${(j:,:)SC_NOTES}"
 
 # ---- de-dup: renotify only on escalation, or once per SC_RENOTIFY_H hours ---
 # State holds TWO independent facts, and conflating them is a bug: the last level

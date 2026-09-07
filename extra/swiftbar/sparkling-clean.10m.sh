@@ -42,6 +42,8 @@ if [[ -z $SC ]]; then
   exit 0
 fi
 
+source ${SC:h}/lib/common.zsh 2>/dev/null
+
 local json
 json=$(zsh "$SC" --json 2>/dev/null)
 local cli=${SC:h}/sparkling-clean
@@ -103,6 +105,22 @@ print -r -- "$json" \
       [[ $l != OK && -n $d && $d != "$h" ]] && print -r -- "   ${d} | size=11 color=gray"
     done
 
+# The percentage answers "is this a problem"; the absolute figure answers "how
+# much room do I have", and people want both. Only the disk row gets it — the
+# others have no second number worth showing.
+local freeh=$(sc_human $(sc_free_bytes) 2>/dev/null)
+[[ -n $freeh ]] && print -r -- "   ${freeh} free | size=11 color=gray"
+
+# A point-in-time check tells you where you are; the trend tells you where you
+# are going, which is the view that would have caught the original incident
+# months earlier.
+local hist=$(sc_free_history 24 2>/dev/null)
+if [[ -n $hist ]]; then
+  local spark=$(print -r -- "$hist" | sc_sparkline)
+  local delta=$(print -r -- "$hist" | sc_free_delta)
+  [[ -n $spark ]] && print -r -- "   ${spark}  ${delta} | font=Menlo size=12 color=gray"
+fi
+
 # Notes are context, never alarming — dimmed, matching the CHECK/NOTE split.
 # Strip the "notes":[ ... ] wrapper FIRST; grepping quoted strings across the
 # whole blob also matches the key "notes" itself.
@@ -134,4 +152,17 @@ if [[ -x $cli ]]; then
 fi
 print -r -- "Refresh | refresh=true"
 print -r -- "---"
-print -r -- "What these checks mean… | href=https://github.com/donco-labs/sparkling-clean/blob/main/docs/GUIDE.md"
+# Version comes from the Homebrew Cellar path the symlink resolves to, so it is
+# always the version actually running rather than one baked in at build time.
+local ver=$(print -r -- "$SC" | sed -nE 's|.*/Cellar/sparkling-clean/([^/]+)/.*|\1|p')
+print -r -- "About sparkling-clean"
+print -r -- "--Version ${ver:-dev} | color=gray"
+print -r -- "--Warn below ${SC_WARN_PCT}% free · critical below ${SC_CRIT_PCT}% | color=gray"
+print -r -- "--Backup stale after ${SC_TM_WARN_D}d · critical after ${SC_TM_CRIT_D}d | color=gray"
+print -r -- "-----"
+print -r -- "--What these checks mean… | href=https://github.com/donco-labs/sparkling-clean/blob/main/docs/GUIDE.md"
+print -r -- "--Repository… | href=https://github.com/donco-labs/sparkling-clean"
+print -r -- "--Report an issue… | href=https://github.com/donco-labs/sparkling-clean/issues/new"
+print -r -- "-----"
+print -r -- "--Checks run every 2h in the background | color=gray"
+print -r -- "--Nothing here changes your Mac without asking | color=gray"

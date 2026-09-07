@@ -366,6 +366,57 @@ sc_run_health_checks() {
   fi
 }
 
+# ----------------------------------------------------------------- trends --
+# The guard logs free bytes on every run, so a point-in-time check becomes a
+# trend for free. This is the view that would have caught the original incident
+# months earlier: not "you are at 93%", but "you have been falling for weeks".
+
+# Free-space samples, oldest first, one per line: "<epoch> <bytes>".
+sc_free_history() {  # $1 = max samples (default 24)
+  local max=${1:-24}
+  [[ -r $SC_LOG ]] || return 1
+  grep -oE '^[0-9-]+T[0-9:]+[+-][0-9]+ guard [A-Z]+ pct=[0-9]+ free=[0-9]+' $SC_LOG 2>/dev/null \
+    | sed -E 's/^([0-9-]+)T([0-9:]+)[+-][0-9]+ .*free=([0-9]+)$/\1 \2 \3/' \
+    | while read -r d t b; do
+        print -r -- "$(date -j -f '%Y-%m-%d %H:%M:%S' "$d $t" '+%s' 2>/dev/null) $b"
+      done | grep -E '^[0-9]+ [0-9]+$' | tail -$max
+}
+
+# Unicode block sparkline. Scaled to the observed range rather than to zero —
+# the question is "which way is this moving", and a 0-500 GB axis flattens every
+# real change into a straight line.
+sc_sparkline() {  # reads "<epoch> <bytes>" lines on stdin
+  local -a v; local l
+  while read -r _ b; do v+=($b); done
+  (( ${#v} < 2 )) && return 1
+  local min=${v[1]} max=${v[1]} x
+  for x in $v; do (( x < min )) && min=$x; (( x > max )) && max=$x; done
+  local span=$(( max - min ))
+  local -a blocks=('▁' '▂' '▃' '▄' '▅' '▆' '▇' '█')
+  local out=""
+  for x in $v; do
+    if (( span == 0 )); then out+="▄"
+    else out+=${blocks[$(( x == max ? 8 : (x - min) * 8 / span + 1 ))]}
+    fi
+  done
+  print -r -- "$out"
+}
+
+# Human delta between the oldest and newest sample, with the window it spans.
+sc_free_delta() {  # reads "<epoch> <bytes>" lines on stdin
+  local -a e b; local ts by
+  while read -r ts by; do e+=($ts); b+=($by); done
+  (( ${#b} < 2 )) && return 1
+  local d=$(( b[-1] - b[1] )) hours=$(( (e[-1] - e[1]) / 3600 ))
+  local sign="+"; (( d < 0 )) && { sign="−"; d=$(( -d )) }
+  local window
+  if   (( hours >= 48 )); then window="$(( hours / 24 ))d"
+  elif (( hours >= 1  )); then window="${hours}h"
+  else                         window="under an hour"
+  fi
+  print -r -- "${sign}$(sc_human $d) over ${window}"
+}
+
 # --------------------------------------------------------------- execution --
 # Every destructive helper routes through here. SC_APPLY=0 (the default) prints
 # what would happen and touches nothing.
