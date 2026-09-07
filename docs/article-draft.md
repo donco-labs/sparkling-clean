@@ -4,7 +4,9 @@
 
 ---
 
-It started the way these things do: the machine would freeze, hard, for ten or twenty seconds at a stretch. Watchdog timeouts. Activity Monitor showing disk activity pinned near 1 GB/s with nothing obvious to explain it.
+It started the way these things do: the machine would freeze, hard, for ten or twenty seconds at a stretch. Watchdog timeouts. Activity Monitor showing disk reads spiking toward 1 GB/s with nothing obvious to explain it.
+
+(Hold that number loosely. Activity Monitor reports instantaneous bursts, and a burst proves nothing on its own. The figure that mattered turned out to be far smaller and far more damning.)
 
 A 24 GB M-series MacBook Air, 512 GB SSD, macOS 26. My first thought was the same as yours would be: the drive is dying.
 
@@ -29,7 +31,7 @@ That last line looked like the smoking gun. It is not.
 
 `system=0x38` is IOKit. `code=745` is `kIOReturnDeviceError`. Alarming, and completely meaningless here.
 
-Apple Silicon Macs expose exactly one NVMe log page through their driver: `0x02`, the health page. `smartctl` also asks for page `0x01`, the Error Information Log, and the driver refuses. Every Apple Silicon Mac produces this line.
+Apple's NVMe driver exposes the health page, `0x02`. `smartctl` also asks for page `0x01`, the Error Information Log, and the driver refuses. I have seen this on every Apple Silicon Mac I have checked, and the smartmontools project documents the limitation — but I have checked a handful, not a population.
 
 The tell is two lines above it: **`Error Information Log Entries: 0`**. There is nothing to read. `smartctl` tries to read one entry anyway, gets refused, and reports a device error.
 
@@ -47,18 +49,22 @@ Data Units Written:  27,033,148 [13.8 TB]
 Power On Hours:      438
 ```
 
-39.5 TB read across 438 powered-on hours is **90 GB per hour, sustained, for the life of the machine**. No workload I run does that. And the read:write ratio is nearly 3:1.
+39.5 TB read across 438 powered-on hours is 90 GB per hour, every hour the machine has ever been awake.
 
-That ratio is the diagnosis. Heavy *writing* means a busy machine. Heavy *reading* at three times your write volume means the same data is being read over and over — the signature of **pagein thrash**. The disk was not failing. It was being flogged.
+That sounds apocalyptic until you divide it out: **25 MB/s**. Which is the point. This was never a spike — it is a grind, running continuously for the life of the drive, low enough that nothing ever flagged it and relentless enough to add up to 39.5 TB.
 
-Confirmed live:
+The read:write ratio is nearly 3:1. On its own that proves little; compiling, container pulls and model loading all read far more than they write. What it did was tell me where to look next, and looking next is what produced actual evidence:
 
 ```
-Pageins:   1,043,671      (~16 GB — in a 16-minute uptime)
+Pageins:   1,043,671      (~17 GB — in a 16-minute uptime)
 Pageouts:      6,233
 PhysMem:   23G used, 259M unused
 vm.swapusage: total = 0.00M
 ```
+
+A million pageins against six thousand pageouts. The machine was not writing; it was reading the same pages back, over and over. Work that out and it comes to **18 MB/s of pure re-reading** — the same order as the drive's lifetime average, which means this had been going on far longer than the sixteen minutes I happened to be watching.
+
+That is **pagein thrash**, and it is a memory symptom wearing a disk costume. The SSD was not failing. It was being asked to serve as RAM.
 
 ## Three ways `df` lied to me
 
@@ -89,27 +95,29 @@ It starts with that lie of omission from Finder. You glance at storage, see 50 G
 
 A heavy polyglot toolchain doesn't just move gigabytes. It generates hundreds of thousands of tiny transient files — `~/.cache` alone held 107,760 of them. The disk creeps up over months, and nothing warns you, because 90% full still looks like plenty of room.
 
-Then it stops being a storage problem and becomes a memory one. Here is what actually produces "1 GB/s of disk reads and the machine locks up":
+Then it stops being a storage problem and becomes a memory one:
 
 ```
 disk fills past ~90%
       ↓
-macOS cannot grow a swapfile   (swap lives on that same volume)
+no headroom for snapshots, swap growth, or anything else
       ↓
-RAM pressure has no relief valve
+RAM saturates; the compressor absorbs what it can
       ↓
 page cache evicts executables and mmapped files
       ↓
-they are re-read from SSD immediately   ← the 1 GB/s
+they are re-read from SSD immediately   ← the sustained 18 MB/s
       ↓
-kernel stalls on I/O → watchdog timeout → jetsam kills your apps
+kernel stalls on I/O → watchdog timeouts → jetsam kills your apps
 ```
 
-The subtle part is the swap reading. `vm.swapusage: total = 0.00M` looks *healthy* in isolation — plenty of people run for weeks without touching swap.
+Here is where I nearly published something I could not defend.
 
-> **Takeaway.** Swap at zero is not a problem. Swap at zero **while RAM is saturated and the disk is nearly full** is the failure: macOS cannot create the swapfile it needs, so memory pressure goes straight to app kills. There was a `JetsamEvent` in `/Library/Logs/DiagnosticReports/` from earlier that day confirming it.
+The tidy version is "the disk was too full for macOS to create a swapfile, so memory pressure had nowhere to go." I believed it for most of a day. **I cannot prove it.** There were 36.6 GB free — far more than the gigabyte a swapfile needs — and `swapouts: 0` for the whole boot means macOS never *attempted* to swap. The compressor was holding 9.4 GB of pages squeezed into 3.9 GB and was, technically, coping. I also never read the reason on that day's `JetsamEvent` before macOS rotated the file away, so I cannot tell you it was memory exhaustion rather than a routine per-process kill.
 
-And `23G used, 259M unused` from that same dump is **normal** on macOS — it uses all RAM as cache. Judge pressure by jetsam events, compressor size and swap behaviour, never by "unused".
+Steps 1 and 3 in that diagram are measured. The arrow between them is inference. Treat it as such.
+
+> **Takeaway.** `vm.swapusage: total = 0.00M` means nothing on its own — plenty of machines run for weeks without touching swap. It is a signal only beside saturated RAM and a busy compressor, and even then it tells you the compressor is carrying the system, not that swap was refused. Judge memory pressure by pagein rate, compressor size and jetsam reasons. Never by "unused", which reads 259M on a perfectly healthy Mac.
 
 ## Deleting 9 GB and freeing nothing
 
@@ -128,7 +136,9 @@ A local Time Machine snapshot taken minutes earlier still referenced those block
 > ```
 > sudo tmutil thinlocalsnapshots / 999999999999 4
 > ```
-> Better: pause Time Machine for the duration so it cannot re-pin mid-run — and make sure whatever pauses it turns it back on. I left mine off for half an hour by hand, which is a lousy way to run a backup policy.
+> Those arguments matter. The number is how many bytes to try to free — deliberately absurd, meaning "all of them". The `4` is urgency, on a 1–4 scale, and 4 is the most aggressive: it will remove local snapshots rather than negotiate. These are *local* snapshots only; backups on your Time Machine destination are untouched. If you want a gentler pass, use urgency `1`.
+>
+> Better still: pause Time Machine for the duration so it cannot mint a fresh snapshot mid-run — and make sure whatever pauses it turns it back on. I left mine off for half an hour by hand, which is a lousy way to run a backup policy.
 
 ## The 460 GB file that was 42 GB
 
@@ -141,9 +151,11 @@ $ du -h Docker.raw
 
 `ls -lh` reports logical size. `Docker.raw` is sparse — 460 GB is the ceiling it may grow to, not what it occupies. Always `du` for disk images, VM bundles, and database files.
 
-Then Docker Desktop did something I didn't expect. Its backend had been idle, and while I was poking at it, macOS's Resource Saver stopped the VM. On the way out, Docker **compacted the image**: 42 GB → 22 GB. Twenty gigabytes reclaimed by an app shutting down cleanly.
+Then Docker Desktop did something I didn't expect. Its backend had been idle, and while I was poking at it, Resource Saver stopped the VM. I measured the file before and after: **42 GB → 22 GB**. Twenty gigabytes returned by an app shutting down.
 
-That taught me two things. Pruning frees space *inside* the VM; only a clean Docker Desktop shutdown shrinks the host-side file. And the transient `500 Internal Server Error` responses I'd seen from the Docker API were teardown, not a wedged daemon. I had been one impatient `kill -9` away from leaving the VM's filesystem dirty — with my Postgres volumes inside it.
+I am describing a before and an after, not a mechanism I watched. Docker compacts the image at some point around a clean shutdown; whether that is TRIM passthrough, an explicit compaction step, or something else, I did not instrument it. What is reliable is the practical rule.
+
+That taught me two things. Pruning frees space *inside* the VM; the host-side file shrinks only around a clean Docker Desktop shutdown, never from `docker system prune` alone. And the transient `500 Internal Server Error` responses I'd seen from the Docker API were teardown, not a wedged daemon. I had been one impatient `kill -9` away from leaving the VM's filesystem dirty — with my Postgres volumes inside it.
 
 By the end of that night: **36.6 GB → 121.4 GB free.** Load average fell from 10.76 to 2.29. (It settles at 116.7 GB a day later, once the backup below has run and taken its own snapshots.)
 
@@ -300,7 +312,7 @@ right, and I got it wrong twice first.
 
 **Mistake two: naming the wrong subsystem.** Every notification title was hardcoded `"Disk ${level}"` and the message body was built entirely from the disk branch. So the stale-backup alert announced itself as **"Disk CRIT: 22% free"** on a machine with 121 GB free — naming the wrong problem and contradicting its own threshold in the same sentence. Now each check owns its verdict and its wording, and the alert names the subsystem that's actually unhealthy.
 
-**A third, subtler one:** not all `JetsamEvent`s mean the same thing. `per-process-limit` is one process hitting its own ceiling — routine. `vm-pageshortage` is real memory exhaustion. Counting them together cries wolf over normal housekeeping. And my first classifier used `sudo -n grep`, which fails whenever a password is required — so it would have reported "no memory events" forever, silently, with no way to tell that answer apart from the truth.
+**Mistake three: a check that could only ever answer "fine."** Not all `JetsamEvent`s mean the same thing — `per-process-limit` is routine, `vm-pageshortage` is real memory exhaustion — so the guard learned to read the reason. My first classifier used `sudo -n grep`, which fails whenever a password is required. It would have reported "no memory events" forever, and nothing would have distinguished that from the truth.
 
 > **Takeaway.** A check that reads *healthy* when it cannot tell is worse than no check. Report UNKNOWN. This bit me three separate times in one night, in three different scripts.
 
@@ -315,6 +327,20 @@ This bites when three conditions coincide: **a nearly-full disk, a slow backup d
 - Most developers never back up a dev machine at all beyond git and cloud sync, and quietly accept that a rebuild costs a day.
 
 I'd been running all three conditions for months without knowing. The disk crept up, the backups died, and macOS never mentioned either.
+
+### If it is memory, disk cleanup will not save you
+
+Worth saying plainly, because everything above is about reclaiming space and that is only half an answer.
+
+Freeing 85 GB gave the system headroom. It did not add RAM. On a 24 GB machine running an editor, a browser, a container runtime and a language server or three, the working set can simply exceed what you have — and then the compressor grinds, pageins climb, and no amount of `brew cleanup` touches it. The honest remedies for that are unglamorous: run fewer things at once, quit the container runtime when you are not using it, kill the second language server, or buy more RAM on the next machine.
+
+Two numbers tell you which problem you have. If **pageins climb while pageouts stay near zero** and the compressor is large, that is a working set too big for the machine. If free space is low and snapshots are stacking up, that is the one this article can fix.
+
+```bash
+vm_stat | grep -E "Pageins|Pageouts"
+```
+
+Mine was both. Only one of them was fixable in a night.
 
 ## Four checks worth running right now
 
@@ -337,6 +363,10 @@ tmutil listlocalsnapshots /
 # 4. Is a cache in every one of your backups?
 tmutil isexcluded ~/.cache
 ```
+
+`[Included]` means yes, it is — along with however many hundreds of thousands of files it holds. Exclude it with `sudo tmutil addexclusion -p ~/.cache`.
+
+One caution before you get enthusiastic with that command. Exclude **caches and registries**, not the directories that hold them: `~/.cargo/registry`, not `~/.cargo`, which also holds your credentials file; `~/.m2/repository`, not `~/.m2`, which holds `settings.xml`. And think twice about toolchain roots like `~/.rustup` or `~/.sdkman` — reconstructible in principle, but only if you have network and an afternoon. An exclusion is not a deletion, but it does mean that directory will not be there when you restore.
 
 If #2 surprises you, this article did its job.
 

@@ -84,9 +84,10 @@
     <div class="step"><div class="n">1</div><div><div class="t">The disk passes ~90% full</div>
       <div class="d">On this machine: 36.6 GB free of 494 GB.</div></div></div>
     <div class="arrow"></div>
-    <div class="step hot"><div class="n">2</div><div><div class="t">macOS can no longer grow a swapfile</div>
-      <div class="d">Swap lives on the same volume. <code>vm.swapusage</code> reads
-        <strong>total = 0.00M</strong> — which looks healthy in isolation.</div></div></div>
+    <div class="step hot"><div class="n">2</div><div><div class="t">No headroom left for anything</div>
+      <div class="d">Snapshots, swap growth, working space — all competing for 36.6 GB.
+        <code>vm.swapusage</code> reads <strong>total = 0.00M</strong>, which looks healthy
+        in isolation and tells you almost nothing on its own.</div></div></div>
     <div class="arrow"></div>
     <div class="step"><div class="n">3</div><div><div class="t">Memory pressure loses its relief valve</div>
       <div class="d">23 GB of 24 GB in use, and nowhere to page out to.</div></div></div>
@@ -94,14 +95,17 @@
     <div class="step"><div class="n">4</div><div><div class="t">The page cache evicts executables and mapped files</div>
       <div class="d">They are needed again immediately, so they are read straight back from the SSD.</div></div></div>
     <div class="arrow"></div>
-    <div class="step hot"><div class="n">5</div><div><div class="t">Sustained ~1 GB/s of reads — pagein thrash</div>
-      <div class="d">1,043,671 pageins against 6,233 pageouts, in a 16-minute uptime.</div></div></div>
+    <div class="step hot"><div class="n">5</div><div><div class="t">Sustained 18 MB/s of re-reads — pagein thrash</div>
+      <div class="d">1,043,671 pageins against 6,233 pageouts in a 16-minute uptime. Bursts hit
+        far higher; the grind is what accumulates.</div></div></div>
     <div class="arrow"></div>
     <div class="step hot"><div class="n">6</div><div><div class="t">The kernel stalls on I/O — watchdog timeouts and app kills</div>
       <div class="d">Which is where you notice, and where you start blaming the drive.</div></div></div>
   </div>
-  <p class="note"><strong>Swap at zero is not a problem.</strong> Swap at zero <em>while RAM is
-    saturated and the disk is nearly full</em> is the failure.</p>
+  <p class="note"><strong>Steps 1 and 3 are measured; the arrow between them is inference.</strong>
+    36.6 GB is ample for a swapfile, and macOS never attempted one — the compressor was coping.
+    What is certain is that the disk was 93% full, RAM was saturated, and the drive was serving
+    re-reads it should never have been asked for.</p>
 </div>
 
 <!-- ============================ FIGURE 2 ============================ -->
