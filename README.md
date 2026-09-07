@@ -1,12 +1,19 @@
 # sparkling-clean
 
-macOS disk triage toolkit. Diagnose disk-pressure freezes, reclaim space safely,
-and get warned before it happens again.
+A zero-dependency macOS disk triage toolkit. Diagnose disk-pressure freezes,
+reclaim space safely, and get warned before it happens again.
 
-Born from a real incident: a 24 GB MacBook Air hitting sustained ~1 GB/s disk
-reads and watchdog freezes. The SSD was healthy. The disk being 93% full was the
-cause — macOS could not grow a swapfile, so RAM pressure turned into pagein
-thrash and jetsam kills. Full writeup: [docs/POSTMORTEM.md](docs/POSTMORTEM.md).
+macOS abstracts away filesystem realities to keep the experience seamless. That
+works until you combine a nearly-full disk, a slow backup destination and a heavy
+developer toolchain — at which point the abstractions stop protecting you and
+start hiding the problem.
+
+Born from a real incident: a 24 GB MacBook Air freezing under watchdog timeouts,
+with the drive serving a sustained **18 MB/s of pagein thrash** — memory pressure
+wearing a disk costume. The SSD was healthy: 0 media errors, 0% endurance used.
+The disk was 93% full, Time Machine had not completed a backup in 62 days, and
+nothing had said so. Full writeup, including which theories turned out wrong:
+[docs/POSTMORTEM.md](docs/POSTMORTEM.md).
 
 ## Install
 
@@ -185,6 +192,9 @@ Thresholds, overridable by env: `SC_WARN_PCT` (15), `SC_CRIT_PCT` (10),
 | `docs/POSTMORTEM.md` | The incident, and which lesson became which line of code |
 
 ## The four things worth knowing up front
+
+Before running a single command: the standard macOS utilities are not telling you
+the truth about your disk.
 
 **1. `df` is misleading on APFS.** Volumes share one container, so `Size` and
 `Avail` are container-wide and identical on every row — never sum them. `df -h`

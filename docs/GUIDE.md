@@ -1,8 +1,8 @@
 # macOS disk creep: diagnose, clean, and stay clean
 
 A field guide written from a real incident (see [POSTMORTEM.md](POSTMORTEM.md)):
-a 24 GB MacBook Air hitting sustained ~1 GB/s disk reads, freezes, and watchdog
-timeouts. The SSD was perfectly healthy. The disk being 93% full was the cause.
+a 24 GB MacBook Air hitting freezes and watchdog timeouts, with reads spiking
+toward 1 GB/s and grinding at 18 MB/s sustained. The SSD was perfectly healthy. The disk being 93% full was the cause.
 
 Read §1 to understand *why* the obvious tools mislead you. Skip to §3 if you
 just need commands.
@@ -121,7 +121,8 @@ Data Units Written:  27,033,148 [13.8 TB]
 Power On Hours:      438
 ```
 
-39.5 TB read over 438 hours is **90 GB/hour sustained**. No normal workload does
+39.5 TB read over 438 hours is 90 GB/hour — which is **25 MB/s sustained**, every
+hour the drive has been awake. Not a spike; a grind. No normal workload does
 that. A read:write ratio near 3:1 at that rate is the signature of **pagein
 thrash** — not disk wear. Which points at memory, not storage.
 
@@ -134,7 +135,7 @@ Here is the chain that produces "1 GB/s disk and the machine freezes":
 ```
 disk fills past ~90%
         ↓
-macOS cannot grow a swapfile   (swap lives on the same volume)
+no headroom for snapshots, swap growth, or working space
         ↓
 RAM pressure has no relief valve
         ↓

@@ -1,8 +1,8 @@
 # Incident: pathological disk I/O and watchdog freezes
 
 **Date:** 2026-09-05 · **Host:** MacBook Air, Apple M-series, 24 GB RAM, 512 GB SSD
-**Symptom:** sustained ~1 GB/s disk activity, machine freezes, watchdog timeouts
-**Root cause:** disk at 93% capacity prevented swapfile growth
+**Symptom:** machine freezes and watchdog timeouts; Activity Monitor reads spiking toward 1 GB/s
+**Root cause:** pagein thrash on a saturated 24 GB machine with a 93%-full disk
 **Resolution:** reclaimed 84.8 GB · **Hardware fault: none**
 
 ---
@@ -32,7 +32,7 @@ The drive was never the problem.
 The lifetime counters pointed at the real cause:
 
 ```
-Data Units Read:     39.5 TB     ← 90 GB/hour over 438 power-on hours
+Data Units Read:     39.5 TB     ← 90 GB/hour over 438 power-on hours = 25 MB/s sustained
 Data Units Written:  13.8 TB
 ```
 
@@ -46,8 +46,11 @@ PhysMem:  23G used, 259M unused
 vm.swapusage: total = 0.00M
 ```
 
-Swap at zero with RAM saturated is the tell. macOS could not grow a swapfile
-because the volume was at 93%, so memory pressure had no relief valve. Page cache
+Swap at zero beside saturated RAM is a signal, but not the one first assumed.
+There were 36.6 GB free — far more than a swapfile needs — and swapouts stayed at
+0 for the whole boot, meaning macOS never attempted one; the compressor was
+coping. The disk being 93% full is measured, the thrash is measured, and the
+causal arrow between them is inference. See lesson 12. Page cache
 evicted executables, which were immediately re-read from SSD, at gigabytes per
 second, until the kernel stalled long enough to trip the watchdog.
 
@@ -188,6 +191,24 @@ side by side.
     still reports `Indexing enabled`. Use Spotlight Search Privacy, with the
     volume mounted.
 
-12. **Threshold alerting beats forensics.** Every signal — jetsam events, disk-write
+12. **The tidiest mechanism was the one I could not prove.** For most of a day
+    the working theory was "the disk is too full for macOS to create a swapfile,
+    so memory pressure has nowhere to go." It explains every symptom and it is
+    probably wrong: there were 36.6 GB free, far more than the gigabyte a
+    swapfile needs, and `swapouts` stayed at 0 for the entire boot — macOS never
+    attempted one, because the compressor was holding 9.4 GB of pages in 3.9 GB
+    and coping. That day's `JetsamEvent` reason was never read before macOS
+    rotated the file away, so it cannot be claimed as confirmation either.
+
+    What is measured: the disk was 93% full, RAM was saturated, and the drive was
+    serving 18 MB/s of re-reads. What is inference: the arrow from the first to
+    the second.
+
+    The related trap is arithmetic. "90 GB per hour" sounds catastrophic and is
+    25 MB/s — a grind, not a spike. Any reviewer does that division in their head,
+    and a piece that has not done it first has already lost them. Do the division
+    yourself, in public.
+
+13. **Threshold alerting beats forensics.** Every signal — jetsam events, disk-write
    diags, falling free space — was present for days beforehand. Nothing was
    watching. → `disk-guard.zsh` + launchd.
