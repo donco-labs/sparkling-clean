@@ -73,8 +73,12 @@ On first launch SwiftBar asks which folder to use — point it at that one. It i
 notarized but ships quarantined, so macOS shows its standard first-run dialog;
 approve it in System Settings → Privacy & Security → Open Anyway.
 
-Shows nothing but an icon when healthy; colours the title by the worst check when
-not. Reads the guard's `--json` (0.4 s) rather than the full report (tens of
+Shows a monochrome SF Symbol and nothing else when healthy — a template image, so
+it follows the menu bar appearance like any native item. A warning swaps the glyph;
+only a critical condition earns any text, and then just the subject name. The
+dropdown identifies itself, explains each non-OK check, and offers the fix: when
+snapshots are holding space, it hands you `sparkling-clean thin` rather than
+describing the problem and leaving you to search for the remedy. Reads the guard's `--json` (0.4 s) rather than the full report (tens of
 seconds), so it is cheap to refresh.
 
 Deliberately not a bundled app: `tmutil addexclusion` needs Full Disk Access,
@@ -95,6 +99,7 @@ lines of config instead of a signing pipeline.
 | `make clean-safe` | Reclaim tier 1 — caches that regenerate silently |
 | `make clean-more` | Reclaim tier 1+2 — adds re-downloadable caches |
 | `make review` | List tier-3 *data* candidates for manual decision |
+| `sparkling-clean thin` | Release space held by local Time Machine snapshots |
 | `make docker` | Report Docker reclaimable space. Never touches volumes |
 | `make docker-clean` | Prune build cache + untagged images, then compact |
 | `make tm-status` | Which codified Time Machine exclusions are applied |

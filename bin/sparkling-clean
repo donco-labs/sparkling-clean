@@ -31,6 +31,7 @@ usage() {
   print -r -- "  reclaim       tiered disk reclamation          (dry-run by default)"
   print -r -- "  docker        Docker space, never touches volumes (dry-run by default)"
   print -r -- "  tm-exclude    apply the Time Machine exclusion policy (dry-run by default)"
+  print -r -- "  thin          release space held by local Time Machine snapshots"
   print -r -- "  install-guard install the launchd watchdog (checks every 2h)"
   print -r -- "  uninstall-guard"
   print -r -- "  version"
@@ -45,6 +46,35 @@ case $cmd in
   ""|-h|--help|help) usage ;;
   version|-v|--version)
     print -r -- "sparkling-clean ${SPARKLING_CLEAN_VERSION:-dev}" ;;
+  thin)
+    # Space that deletions did not return is usually held by local snapshots.
+    # This is the one operation people most often need and least often know
+    # about, so it explains itself before doing anything.
+    local n=0
+    source $here/lib/common.zsh 2>/dev/null && n=$(sc_snapshot_count)
+    print -r -- "Local Time Machine snapshots on this Mac: ${n}"
+    print -r -- ""
+    print -r -- "These hold on to blocks from files you have deleted. Until they are"
+    print -r -- "thinned, deleting more frees nothing. Thinning removes LOCAL snapshots"
+    print -r -- "only — backups on your Time Machine destination are untouched."
+    print -r -- ""
+    (( n == 0 )) && { print -r -- "Nothing to thin."; exit 0 }
+    # A confirmation prompt should be readable; 21 snapshot names are not.
+    print -r -- "  oldest: $(sc_snapshot_list | head -1)"
+    print -r -- "  newest: $(sc_snapshot_list | tail -1)"
+    print -r -- ""
+    print -r -- "Runs: sudo tmutil thinlocalsnapshots / 999999999999 4"
+    print -r -- "      (999999999999 = free as much as possible; 4 = highest urgency)"
+    print -r -- ""
+    printf 'Thin them now? [y/N] '
+    read -r reply
+    [[ $reply == [yY]* ]] || { print -r -- "Cancelled."; exit 0 }
+    local before=$(sc_free_bytes)
+    sudo tmutil thinlocalsnapshots / 999999999999 4
+    local after=$(sc_free_bytes)
+    print -r -- ""
+    print -r -- "Reclaimed $(sc_human $(( after - before ))). Snapshots now: $(sc_snapshot_count)."
+    ;;
   install-guard)
     local plist=$HOME/Library/LaunchAgents/com.sparklingclean.diskguard.plist
     mkdir -p ${plist:h}

@@ -44,6 +44,7 @@ fi
 
 local json
 json=$(zsh "$SC" --json 2>/dev/null)
+local cli=${SC:h}/sparkling-clean
 if [[ -z $json ]]; then
   print -r -- "💾 ?"
   print -r -- "---"
@@ -62,12 +63,21 @@ local level=$(jget level)
 local subject=$(jget subject)
 local headline=$(jget headline)
 
+# SF Symbols render as template images: monochrome, and they follow the menu bar
+# appearance the way every native item does. An emoji cannot — it is always full
+# colour, and 💾 is a save icon from 1998 besides.
+#
+# Text costs horizontal space that the menu bar does not have, so only a CRIT
+# earns any, and then only the subject. A WARN changes the glyph and nothing
+# else: enough to notice, not enough to crowd out anything.
 case $level in
-  (CRIT) print -r -- "💾 ${subject}: ${headline} | color=red"    ;;
-  (WARN) print -r -- "💾 ${subject}: ${headline} | color=orange" ;;
-  (*)    print -r -- "💾"                                        ;;   # quiet when healthy
+  (CRIT) print -r -- "${subject} | sfimage=exclamationmark.triangle.fill" ;;
+  (WARN) print -r -- "| sfimage=exclamationmark.triangle"                 ;;
+  (*)    print -r -- "| sfimage=internaldrive"                            ;;
 esac
 
+print -r -- "---"
+print -r -- "sparkling-clean · disk and backup health | size=11 color=gray href=https://github.com/donco-labs/sparkling-clean"
 print -r -- "---"
 
 # One line per check, colour-coded, worst first is not needed — order is stable
@@ -100,14 +110,23 @@ if [[ -n $notes_blob ]]; then
 fi
 
 print -r -- "---"
+
+# Naming a problem without saying what to do about it is half a monitor. The
+# snapshot check is the one people most often cannot act on unaided, so when it
+# fires, offer the fix rather than describing it.
+if print -r -- "$json" | grep -q '"level":"WARN","name":"Snapshots"'; then
+  [[ -x $cli ]] && print -r -- "Thin snapshots to reclaim that space… | bash=${cli} param1=thin terminal=true"
+fi
+
 # terminal=true opens Terminal and runs the command there. Two entries, because
 # the two reports have very different costs and a menu click should not spring a
 # surprise password prompt:
 #   --brief  ~1.5s, no sudo   — space, snapshots, Time Machine, exclusions
 #   full     ~40s, sudo       — adds SMART, which needs `sudo smartctl`
-local cli=${SC:h}/sparkling-clean
 if [[ -x $cli ]]; then
   print -r -- "Quick summary… | bash=${cli} param1=report param2=--brief terminal=true"
   print -r -- "Full report (~40s, asks for sudo)… | bash=${cli} param1=report terminal=true"
 fi
 print -r -- "Refresh | refresh=true"
+print -r -- "---"
+print -r -- "What these checks mean… | href=https://github.com/donco-labs/sparkling-clean/blob/main/docs/GUIDE.md"
