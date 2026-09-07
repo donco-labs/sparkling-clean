@@ -399,7 +399,20 @@ sc_sizes_refresh() {
   mkdir -p ${SC_SIZES_CACHE:h}
   local tmp=${SC_SIZES_CACHE}.$$
   local c sz
-  for c in $SC_WATCH_PATHS; do
+
+  # Drop any watched path that lives inside another one — ~/.gradle/caches under
+  # ~/.gradle, DerivedData under ~/Library/Developer/Xcode. Without this the
+  # child is counted twice in the total and both rows appear in the list, which
+  # reads as though the space is in two places.
+  local -a keep=()
+  local a b nested
+  for a in ${(o)SC_WATCH_PATHS}; do
+    nested=0
+    for b in $keep; do [[ $a == ${b}/* ]] && { nested=1; break } ; done
+    (( nested )) || keep+=($a)
+  done
+
+  for c in $keep; do
     [[ -e $c ]] || continue
     sz=$(sc_size_of $c)
     (( sz > 0 )) && printf '%s\t%s\n' "$sz" "$c"

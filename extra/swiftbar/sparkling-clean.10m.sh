@@ -162,9 +162,11 @@ if [[ -n $sizes ]]; then
   local when="${age}h ago"; (( age < 1 )) && when="just now"
   print -r -- "---"
   print -r -- "Watchlist · measured ${when}"
-  local shown=0
+  # No cap — this is a submenu and the whole point is seeing the shape of the
+  # set. A floor instead, so trivial entries do not pad the list.
+  : ${SC_WATCH_FLOOR:=104857600}          # 100 MB
   print -r -- "$sizes" | while IFS=$'\t' read -r b pth; do
-    (( shown++ >= 8 )) && continue
+    (( b >= SC_WATCH_FLOOR )) || continue
     printf -- '--%10s  %s\n' "$(sc_human $b)" "${pth/#$HOME/~}"
   done
   local tot=$(print -r -- "$sizes" | awk -F'\t' '{s+=$1} END{print s+0}')
