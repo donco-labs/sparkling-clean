@@ -248,23 +248,27 @@ vm.swapusage: total = 5120.00M  used = 3408.25M
 
 The safety valve was working again.
 
-One more thing was quietly making it worse. Checking what held files open on the
-backup volume:
+I thought I had found one more culprit, and I want to include it because being
+wrong here is instructive. Checking what held files open on the backup volume
+turned up 92 handles belonging to `mds_store` — Spotlight, indexing an 819 GB
+sparsebundle over SMB. Obvious waste, I decided: you have a whole backup browser,
+why index it?
 
-```
-73 open handles  mds_store
- 5 open handles  mds
-```
+Two things corrected me. `mdutil -i off` on that volume does nothing useful — it
+drops to `kMDConfigSearchLevelFSSearchOnly` and still reports `Indexing enabled`.
+And System Settings refuses the exclusion outright:
 
-Spotlight was indexing the backup destination — an 819 GB sparsebundle, over SMB.
-You cannot usefully Spotlight-search a Time Machine backup; it has its own browse
-interface. So this was pure competition for the same slow link, on every backup.
+> "Backups of …" is a Time Machine backup folder. You cannot add it to the
+> privacy list.
 
-Worth checking, and a trap inside a trap: `sudo mdutil -i off /Volumes/<backup>`
-does **not** disable it. It drops to `kMDConfigSearchLevelFSSearchOnly` and still
-reports `Indexing enabled`. The exclusion that actually works is System Settings
-→ Spotlight → Search Privacy, and the volume must be mounted when you add it —
-which for a network destination means during a backup.
+Which is macOS telling you the index is deliberate. Nearly all those handles are
+on `.Spotlight-V100/Store-V2` **on the destination**, and that index is what makes
+the search field in Time Machine's browser work. It is the feature, not a leak.
+
+> **Takeaway.** When the operating system actively prevents you from "fixing"
+> something, treat that as evidence before treating it as an obstacle. I had a
+> plausible mechanism, a real measurement, and the wrong conclusion — and the
+> only thing that caught it was trying the fix and reading the refusal.
 
 > **Takeaway.** Filter exclusion candidates by **file count**, not size. A 300 MB directory with 200,000 tiny files costs far more than 6 GB of model weights. And exclude subpaths deliberately — `~/.cargo/registry`, not `~/.cargo`, which holds credentials; `~/.m2/repository`, not `~/.m2`.
 

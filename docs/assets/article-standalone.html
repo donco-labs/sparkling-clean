@@ -175,7 +175,7 @@
 <header>
   <div class="status">
     <span class="chip live">Draft · not published</span>
-    <span class="chip">3,574 words</span>
+    <span class="chip">3,648 words</span>
     <span class="chip">5 figures</span>
     <span class="chip">Target: Medium</span>
   </div>
@@ -422,11 +422,11 @@ $ du -h Docker.raw
 <p>And afterwards, for the first time in the whole exercise:</p>
 <pre class="term"><code>vm.swapusage: total = 5120.00M  used = 3408.25M</code></pre>
 <p>The safety valve was working again.</p>
-<p>One more thing was quietly making it worse. Checking what held files open on the backup volume:</p>
-<pre class="term"><code>73 open handles  mds_store
- 5 open handles  mds</code></pre>
-<p>Spotlight was indexing the backup destination — an 819 GB sparsebundle, over SMB. You cannot usefully Spotlight-search a Time Machine backup; it has its own browse interface. So this was pure competition for the same slow link, on every backup.</p>
-<p>Worth checking, and a trap inside a trap: <code>sudo mdutil -i off /Volumes/&lt;backup&gt;</code> does <strong>not</strong> disable it. It drops to <code>kMDConfigSearchLevelFSSearchOnly</code> and still reports <code>Indexing enabled</code>. The exclusion that actually works is System Settings → Spotlight → Search Privacy, and the volume must be mounted when you add it — which for a network destination means during a backup.</p>
+<p>I thought I had found one more culprit, and I want to include it because being wrong here is instructive. Checking what held files open on the backup volume turned up 92 handles belonging to <code>mds_store</code> — Spotlight, indexing an 819 GB sparsebundle over SMB. Obvious waste, I decided: you have a whole backup browser, why index it?</p>
+<p>Two things corrected me. <code>mdutil -i off</code> on that volume does nothing useful — it drops to <code>kMDConfigSearchLevelFSSearchOnly</code> and still reports <code>Indexing enabled</code>. And System Settings refuses the exclusion outright:</p>
+<aside class="take">"Backups of …" is a Time Machine backup folder. You cannot add it to the privacy list.</aside>
+<p>Which is macOS telling you the index is deliberate. Nearly all those handles are on <code>.Spotlight-V100/Store-V2</code> <strong>on the destination</strong>, and that index is what makes the search field in Time Machine's browser work. It is the feature, not a leak.</p>
+<aside class="take"><strong>Takeaway.</strong> When the operating system actively prevents you from "fixing" something, treat that as evidence before treating it as an obstacle. I had a plausible mechanism, a real measurement, and the wrong conclusion — and the only thing that caught it was trying the fix and reading the refusal.</aside>
 <aside class="take"><strong>Takeaway.</strong> Filter exclusion candidates by <strong>file count</strong>, not size. A 300 MB directory with 200,000 tiny files costs far more than 6 GB of model weights. And exclude subpaths deliberately — <code>~/.cargo/registry</code>, not <code>~/.cargo</code>, which holds credentials; <code>~/.m2/repository</code>, not <code>~/.m2</code>.</aside>
 <h2>What I built, and what it taught me about monitoring</h2>
 <p>Every signal was present for days beforehand. Jetsam events, macOS's own excessive-disk-write reports, free space falling. Nothing was watching.</p>

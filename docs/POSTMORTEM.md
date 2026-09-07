@@ -184,12 +184,24 @@ side by side.
     Knowing which findings deserve a fourth attempt and which deserve a footnote
     is part of the work.
 
-11. **Spotlight was indexing the backup destination.** 73 `mds_store` handles on
-    an 819 GB sparsebundle over SMB, competing with every backup for the same
-    link, indexing something you cannot usefully search. `mdutil -i off <volume>`
-    does *not* disable it — it drops to `kMDConfigSearchLevelFSSearchOnly` and
-    still reports `Indexing enabled`. Use Spotlight Search Privacy, with the
-    volume mounted.
+11. **Spotlight indexing the backup destination is intended, not a leak.** 92
+    `mds_store` handles on an 819 GB sparsebundle looked like obvious waste. It
+    is not: nearly all of them are on `.Spotlight-V100/Store-V2` *on the
+    destination*, and that index is what powers the search field in Time
+    Machine's own browser.
+
+    Two attempts to "fix" it failed informatively. `mdutil -i off <volume>` does
+    nothing useful — it drops to `kMDConfigSearchLevelFSSearchOnly` and still
+    reports `Indexing enabled`. And Search Privacy refuses the volume outright:
+    *"is a Time Machine backup folder. You cannot add it to the privacy list."*
+
+    When the operating system actively prevents a fix, that is evidence before it
+    is an obstacle. A plausible mechanism and a real measurement still produced
+    the wrong conclusion; only attempting the fix caught it.
+
+    (The Google Drive exclusion in lesson 6 is a different case and remains
+    correct — user volumes can be excluded, Time Machine destinations cannot.)
+
 
 12. **The tidiest mechanism was the one I could not prove.** For most of a day
     the working theory was "the disk is too full for macOS to create a swapfile,
