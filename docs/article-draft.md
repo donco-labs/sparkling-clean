@@ -85,7 +85,11 @@ It said 36.6 GB free. **93% full.**
 
 ## The chain nobody diagnoses correctly
 
-Here is what actually produces "1 GB/s of disk reads and the machine locks up":
+It starts with that lie of omission from Finder. You glance at storage, see 50 GB free, and assume you have breathing room — and because you have breathing room, you never look again.
+
+A heavy polyglot toolchain doesn't just move gigabytes. It generates hundreds of thousands of tiny transient files — `~/.cache` alone held 107,760 of them. The disk creeps up over months, and nothing warns you, because 90% full still looks like plenty of room.
+
+Then it stops being a storage problem and becomes a memory one. Here is what actually produces "1 GB/s of disk reads and the machine locks up":
 
 ```
 disk fills past ~90%

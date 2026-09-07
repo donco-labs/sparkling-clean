@@ -175,7 +175,7 @@
 <header>
   <div class="status">
     <span class="chip live">Draft · not published</span>
-    <span class="chip">2,508 words</span>
+    <span class="chip">2,597 words</span>
     <span class="chip">5 figures</span>
     <span class="chip">Target: Medium</span>
   </div>
@@ -278,7 +278,9 @@ vm.swapusage: total = 0.00M</code></pre>
   </div>
   <p class="note"><strong>Swap at zero is not a problem.</strong> Swap at zero <em>while RAM is
     saturated and the disk is nearly full</em> is the failure.</p></div></figure>
-<p>Here is what actually produces "1 GB/s of disk reads and the machine locks up":</p>
+<p>It starts with that lie of omission from Finder. You glance at storage, see 50 GB free, and assume you have breathing room — and because you have breathing room, you never look again.</p>
+<p>A heavy polyglot toolchain doesn't just move gigabytes. It generates hundreds of thousands of tiny transient files — <code>~/.cache</code> alone held 107,760 of them. The disk creeps up over months, and nothing warns you, because 90% full still looks like plenty of room.</p>
+<p>Then it stops being a storage problem and becomes a memory one. Here is what actually produces "1 GB/s of disk reads and the machine locks up":</p>
 <pre class="term"><code>disk fills past ~90%
       ↓
 macOS cannot grow a swapfile   (swap lives on that same volume)
