@@ -53,10 +53,18 @@ make install-guard   # launchd watchdog: checks every 2h, notifies on WARN/CRIT
 
 ```bash
 brew install --cask swiftbar
-mkdir -p "$HOME/Library/Application Support/SwiftBar"
-ln -sf "$PWD/extra/swiftbar/sparkling-clean.10m.sh" "$HOME/Library/Application Support/SwiftBar/"
+mkdir -p "$HOME/Library/Application Support/SwiftBarPlugins"
+ln -sf "$(brew --prefix)/opt/sparkling-clean/libexec/extra/swiftbar/sparkling-clean.10m.sh" \
+       "$HOME/Library/Application Support/SwiftBarPlugins/"
 open -a SwiftBar
 ```
+
+Point SwiftBar at that folder on first launch. **Use a dedicated folder, not
+`~/Library/Application Support/SwiftBar`** — that is SwiftBar's own state
+directory, and it writes `Diagnostics/latest-system-report.txt` there, chmods it
+executable, and then loads its own report as a plugin. You get a second menu bar
+item showing `?` and "Show Error", and nothing about it suggests where it came
+from.
 
 Quote the destination rather than backslash-escaping the space — the escape does
 not survive being copied out of a terminal or a rendered page. Create the folder
