@@ -74,8 +74,10 @@ notarized but ships quarantined, so macOS shows its standard first-run dialog;
 approve it in System Settings → Privacy & Security → Open Anyway.
 
 Shows a monochrome SF Symbol and nothing else when healthy — a template image, so
-it follows the menu bar appearance like any native item. A warning swaps the glyph;
-only a critical condition earns any text, and then just the subject name. The
+it follows the menu bar appearance like any native item. Severity is weight rather
+than a different symbol: `internaldrive` when healthy, filled on a warning, and
+only a genuine emergency changes the glyph to a caution triangle and earns any
+text. The drive stays recognisable in a crowded menu bar either way. The
 dropdown identifies itself, explains each non-OK check, and offers the fix: when
 snapshots are holding space, it hands you `sparkling-clean thin` rather than
 describing the problem and leaving you to search for the remedy. Reads the guard's `--json` (0.4 s) rather than the full report (tens of

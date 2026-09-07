@@ -66,14 +66,33 @@ case $cmd in
     print -r -- "Runs: sudo tmutil thinlocalsnapshots / 999999999999 4"
     print -r -- "      (999999999999 = free as much as possible; 4 = highest urgency)"
     print -r -- ""
+    # Shell startup can be noisy — an oh-my-zsh update prompt, a version-manager
+    # notice — and anything left in the input buffer gets eaten by the next read,
+    # which silently answers this question for you. Drain first, and read from
+    # the terminal directly rather than whatever stdin happens to be.
+    unsetopt correct correct_all 2>/dev/null
+    print -r -- ""
     printf 'Thin them now? [y/N] '
-    read -r reply
+    # `[[ -r /dev/tty ]]` is true even where the device cannot actually be
+    # opened, so attempt the open rather than test the path.
+    if { : </dev/tty } 2>/dev/null; then
+      while read -t 0.05 -k 1 -s </dev/tty 2>/dev/null; do : ; done
+      read -r reply </dev/tty
+    else
+      read -r reply            # piped or scripted: no tty to drain
+    fi
     [[ $reply == [yY]* ]] || { print -r -- "Cancelled."; exit 0 }
+
     local before=$(sc_free_bytes)
     sudo tmutil thinlocalsnapshots / 999999999999 4
     local after=$(sc_free_bytes)
     print -r -- ""
     print -r -- "Reclaimed $(sc_human $(( after - before ))). Snapshots now: $(sc_snapshot_count)."
+
+    # The menu bar caches its last render for the plugin's interval, so without
+    # this the warning persists for up to ten minutes after it stops being true.
+    # -g keeps focus in this window.
+    open -g "swiftbar://refreshplugin?name=sparkling-clean" 2>/dev/null
     ;;
   install-guard)
     local plist=$HOME/Library/LaunchAgents/com.sparklingclean.diskguard.plist

@@ -70,9 +70,14 @@ local headline=$(jget headline)
 # Text costs horizontal space that the menu bar does not have, so only a CRIT
 # earns any, and then only the subject. A WARN changes the glyph and nothing
 # else: enough to notice, not enough to crowd out anything.
+# Severity is weight, not a different symbol. The glyph stays a drive so the item
+# is recognisable at a glance in a crowded menu bar, and a warning simply fills
+# it in. Only a genuine emergency changes the symbol — a caution triangle for
+# "21 snapshots accumulated" reads the same as one for "no backup in 61 days",
+# and those are not comparable problems.
 case $level in
   (CRIT) print -r -- "${subject} | sfimage=exclamationmark.triangle.fill" ;;
-  (WARN) print -r -- "| sfimage=exclamationmark.triangle"                 ;;
+  (WARN) print -r -- "| sfimage=internaldrive.fill"                       ;;
   (*)    print -r -- "| sfimage=internaldrive"                            ;;
 esac
 
