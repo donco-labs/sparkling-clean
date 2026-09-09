@@ -198,6 +198,39 @@ Nine attempts on the final day alone, each burning CPU and I/O into the very pre
 >
 > Note this reads the preference file directly. `tmutil latestbackup` needs Full Disk Access, which a scheduled agent won't have.
 
+## Two months later, my own check told me everything was fine
+
+I want to spoil my own ending, because the second time is more instructive than the first.
+
+I wrote that check. I put it in a launchd agent that runs every two hours. And on a later evening it told me, calmly and repeatedly:
+
+```
+OK    Backup     1d ago
+```
+
+It said that for thirty-three hours, across nineteen consecutive failed backups.
+
+Same mechanism as before, one level up. `SnapshotDates` records the backups that *finish*. A chain that tries every hour and fails every hour doesn't make that number older — it makes it **stop**. And a number that has stopped is indistinguishable, for a full day, from a number that is fine. By the time it drifts past a two-day threshold, the destination is already two days behind.
+
+The real signal was four lines away in the same file I was already reading:
+
+```
+RESULT = 26
+```
+
+Zero means the last attempt succeeded. Twenty-six is `BACKUP_FAILED_DISCONNECTED_NETWORK`. It had been sitting there the whole time.
+
+> **Takeaway.** Age is a *lagging proxy* for "backups are working." Check the outcome of the most recent attempt too — same file, no extra privileges:
+> ```
+> defaults read /Library/Preferences/com.apple.TimeMachine | grep RESULT
+> log show --last 24h --predicate 'subsystem == "com.apple.TimeMachine"' \
+>   | grep BACKUP_FAILED
+> ```
+
+The cause turned out to be dull, which is the point. A laptop backing up to a NAS over Wi-Fi, closing its lid every few minutes, dropping the SMB session mid-copy every time. Fifty-eight of sixty reconnects landed within five seconds of a sleep transition. `backupd` does hold an anti-sleep assertion — but the kind that only blocks *idle* sleep. Closing the lid ignores it entirely.
+
+Nothing was damaged. Time Machine aborts the attempt and retries cleanly, which is precisely why it never said a word. Seventy minutes with the lid open and it completed.
+
 ## The re-seed, and what it exposed
 
 With the reference snapshot gone, Time Machine abandoned the broken chain and started over: **350 GB, 3.48 million files**, to a consumer NAS over Wi-Fi. It ran for ten and a half hours.
@@ -318,7 +351,9 @@ right, and I got it wrong twice first.
 
 **Mistake three: a check that could only ever answer "fine."** Not all `JetsamEvent`s mean the same thing — `per-process-limit` is routine, `vm-pageshortage` is real memory exhaustion — so the guard learned to read the reason. My first classifier used `sudo -n grep`, which fails whenever a password is required. It would have reported "no memory events" forever, and nothing would have distinguished that from the truth.
 
-> **Takeaway.** A check that reads *healthy* when it cannot tell is worse than no check. Report UNKNOWN. This bit me three separate times in one night, in three different scripts.
+**Mistake four: I built the check out of the artifact of success.** This one took two months to surface, and it is the one I'd most want back. Backup *age* comes from the list of completed backups — so it only moves when the system is working. I had built a check that, by construction, could only ever report success, and then read its stillness as health. The fix was to add a second row reading the outcome of the last attempt, and to keep the two verdicts *separate*: "0 days old **and** failing" is the normal shape of that fault, and folding them into one number lets the healthy half hide the broken half.
+
+> **Takeaway.** A check that reads *healthy* when it cannot tell is worse than no check. Report UNKNOWN. This bit me three separate times in one night, in three different scripts — and a fourth time, two months later, in the check I wrote to fix the problem this article is about.
 
 ## Who this actually affects
 
@@ -331,6 +366,10 @@ This bites when three conditions coincide: **a nearly-full disk, a slow backup d
 - Most developers never back up a dev machine at all beyond git and cloud sync, and quietly accept that a rebuild costs a day.
 
 I'd been running all three conditions for months without knowing. The disk crept up, the backups died, and macOS never mentioned either.
+
+But the second outage had **none** of them. Nineteen percent free, a healthy SSD, −59 dBm Wi-Fi with zero packet loss — and no completed backup for thirty-four hours. The laptop simply never stayed awake long enough in one stretch to finish one.
+
+So the narrower claim is about disk pressure, and the wider one is this: a backup can be switched on, attempting on schedule, damaging nothing, and still not have worked in weeks. Disk pressure is one way to get there. A closed lid is another. What they share is that macOS reports the same thing in both cases, which is nothing at all.
 
 ### If it is memory, disk cleanup will not save you
 
@@ -346,7 +385,7 @@ vm_stat | grep -E "Pageins|Pageouts"
 
 Mine was both. Only one of them was fixable in a night.
 
-## Four checks worth running right now
+## Five checks worth running right now
 
 They take under a minute.
 
@@ -360,11 +399,15 @@ defaults read /Library/Preferences/com.apple.TimeMachine \
   | sed -n '/SnapshotDates/,/);/p' | tail -3
 ```
 ```bash
-# 3. Are snapshots holding space you think you freed?
+# 3. Did the LAST attempt succeed? 0 = yes, anything else is the failure code
+defaults read /Library/Preferences/com.apple.TimeMachine | grep RESULT
+```
+```bash
+# 4. Are snapshots holding space you think you freed?
 tmutil listlocalsnapshots /
 ```
 ```bash
-# 4. Is a cache in every one of your backups?
+# 5. Is a cache in every one of your backups?
 tmutil isexcluded ~/.cache
 ```
 
@@ -372,7 +415,7 @@ tmutil isexcluded ~/.cache
 
 One caution before you get enthusiastic with that command. Exclude **caches and registries**, not the directories that hold them: `~/.cargo/registry`, not `~/.cargo`, which also holds your credentials file; `~/.m2/repository`, not `~/.m2`, which holds `settings.xml`. And think twice about toolchain roots like `~/.rustup` or `~/.sdkman` — reconstructible in principle, but only if you have network and an afternoon. An exclusion is not a deletion, but it does mean that directory will not be there when you restore.
 
-If #2 surprises you, this article did its job.
+If #2 or #3 surprises you, this article did its job. #2 is the one people expect to be fine and is not. #3 is the one that stays wrong while #2 still looks right.
 
 ---
 
