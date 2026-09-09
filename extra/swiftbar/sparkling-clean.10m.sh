@@ -165,15 +165,21 @@ if [[ -n $sizes ]]; then
   # No cap — this is a submenu and the whole point is seeing the shape of the
   # set. A floor instead, so trivial entries do not pad the list.
   : ${SC_WATCH_FLOOR:=104857600}          # 100 MB
-  # Each row opens the directory in Finder. That is worth having on its own,
-  # and it also fixes the header: macOS auto-enables menu items, so a submenu
-  # whose children carry no action leaves its PARENT disabled — "Watchlist"
-  # rendered grey next to a black "About" purely because About has href= rows.
-  # The path is quoted because several of these contain spaces.
+  # Rows are deliberately inert. 0.4.0 gave them a
+  #   | bash=/usr/bin/open param1="<path>" terminal=false
+  # action and the submenu stopped opening at all; at 0.3.2, with these rows
+  # bare, it opened. That is the whole of what is established.
+  #
+  # The mechanism is NOT established. Several of these paths contain spaces and
+  # SwiftBar does not document how a param value containing spaces should be
+  # written, so that is the suspicion — but it is a suspicion, not a finding.
+  #
+  # Do not add an action here again without opening the menu in SwiftBar and
+  # looking. The emitted line looks perfectly correct printed to a terminal,
+  # which is exactly how the broken version shipped.
   print -r -- "$sizes" | while IFS=$'\t' read -r b pth; do
     (( b >= SC_WATCH_FLOOR )) || continue
-    printf -- '--%10s  %s | bash=/usr/bin/open param1="%s" terminal=false\n' \
-      "$(sc_human $b)" "${pth/#$HOME/~}" "$pth"
+    printf -- '--%10s  %s\n' "$(sc_human $b)" "${pth/#$HOME/~}"
   done
   local tot=$(print -r -- "$sizes" | awk -F'\t' '{s+=$1} END{print s+0}')
   local cnt=$(print -r -- "$sizes" | grep -c .)
