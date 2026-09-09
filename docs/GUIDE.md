@@ -62,6 +62,22 @@ macOS mints these roughly hourly whenever Time Machine is enabled — including
 partway through your cleanup, re-pinning what you just deleted. `reclaim.zsh`
 handles this by pausing TM for the duration and thinning at the end.
 
+**Thinning also removes Time Machine's incremental baseline.** `999999999999 4`
+means "free as much as possible, highest urgency", and it means it: one run on
+the host this toolkit came from took 14 snapshots to 0, freed 19 GB, and left
+`ReferenceLocalSnapshotDate` pointing at a snapshot that no longer existed.
+
+That is a fair trade when the chain is healthy. It is a bad one while backups are
+already failing — you remove the baseline at the moment TM most needs it, which
+is the mechanism behind the 62-day outage in [POSTMORTEM.md](POSTMORTEM.md), only
+deliberate instead of accidental. How much extra work the next backup does as a
+result was not measured.
+
+`thin` and `reclaim --apply` refuse to run while a backup is in progress for the
+same family of reason: thinning snapshots the running backup is reading from will
+most likely abort it, and `reclaim` pauses TM with `tmutil disable`, which stops
+it outright. Override with `SC_ALLOW_DURING_BACKUP=1` if you mean it.
+
 ### 1.4 Purgeable space (why Finder disagrees)
 
 Finder and About This Mac count snapshots and evictable caches as free, because
@@ -351,6 +367,37 @@ one means anything.
 
 Thresholds `SC_TM_WARN_D` (2 days) and `SC_TM_CRIT_D` (7 days). A backup that is
 *currently running* does not clear the alert — only a completed one does.
+
+### Age is necessary, and not sufficient
+
+That check has its own blind spot, and it is the same shape as the one it was
+written to catch. `SnapshotDates` records completions, so a chain that attempts
+hourly and fails every time does not age — it freezes. On the source host, 19
+consecutive failures across 33 hours all reported:
+
+```
+OK    Backup     1d ago
+```
+
+Every attempt failed with `BACKUP_FAILED_DISCONNECTED_NETWORK (26)`. Nothing in
+`SnapshotDates` could say so, because nothing completed.
+
+So read the outcome of the most recent attempt as well. `RESULT` is `0` on
+success and non-zero on failure, in the same world-readable plist:
+
+```bash
+# Outcome of the LAST attempt: 0 = success
+defaults read /Library/Preferences/com.apple.TimeMachine | grep RESULT
+
+# ...and what the failure actually was
+log show --last 24h --predicate 'subsystem == "com.apple.TimeMachine"' \
+  | grep BACKUP_FAILED
+```
+
+That is the `Attempts` check: WARN on the first failing observation, CRIT after
+`SC_TM_FAIL_CRIT_H` (12 hours). Age and outcome stay separate rows on purpose —
+"0d ago **and** failing" is the normal shape of this fault, so folding them into
+one verdict lets the healthy number hide the broken one.
 
 ### A healthy backup can still be mostly garbage
 

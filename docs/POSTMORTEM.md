@@ -224,3 +224,54 @@ side by side.
 13. **Threshold alerting beats forensics.** Every signal — jetsam events, disk-write
    diags, falling free space — was present for days beforehand. Nothing was
    watching. → `disk-guard.zsh` + launchd.
+
+14. **The backup-age check had the same blind spot it was built to catch.**
+    Lesson 7 replaced "is Time Machine on" with "how old is the last *completed*
+    backup". On a later incident on the same machine, that check reported
+    `Backup 1d ago — OK` through **19 consecutive failures over 33 hours**.
+
+    The mechanism is identical, one level up. `SnapshotDates` records
+    completions, so a chain attempting hourly and failing every time does not
+    age — it freezes at the last success. For a full day the number is
+    indistinguishable from healthy, and by the time it crosses `SC_TM_WARN_D`
+    the destination is already two days behind.
+
+    Age is a *lagging proxy* for "backups are working". The direct signal was in
+    the same plist the whole time: `RESULT`, the outcome of the most recent
+    attempt — `26`, `BACKUP_FAILED_DISCONNECTED_NETWORK`, throughout. The cause
+    was unremarkable once visible: a laptop backing up to a NAS over Wi-Fi,
+    entering clamshell sleep every few minutes and dropping the SMB session
+    mid-copy. 58 of 60 SMB reconnects landed within five seconds of a sleep
+    transition. Seventy minutes awake fixed it. Nothing was ever damaged — Time
+    Machine aborts the attempt and retries, which is exactly why it stayed quiet.
+
+    → `sc_tm_last_result` and an `Attempts` check, separate from `Backup` so a
+    healthy age cannot mask a failing outcome. WARN on the first failing
+    observation, CRIT after `SC_TM_FAIL_CRIT_H` (12 hours). It reads `RESULT`
+    through the same unprivileged `defaults read` the date comes from: the plist
+    is not world-readable and `tmutil latestbackup` needs Full Disk Access that a
+    LaunchAgent will never have.
+
+    The generalisation: **a check built from the artifact of success can only
+    ever report success.** Lesson 9 said a monitor must separate current state
+    from history. This is that error wearing different clothes — measuring the
+    thing that moves only when the system works, and reading its stillness as
+    health.
+
+15. **Helpers that exist but are never consulted.** `sc_tm_running` had been in
+    `common.zsh` since the health model landed, used in exactly one place: a
+    status line in the report. Neither `sparkling-clean thin` nor `reclaim
+    --apply` ever asked, and both are destructive to a backup in flight — `thin`
+    runs `tmutil` at urgency 4 against snapshots the running backup is reading
+    from, and `reclaim` pauses TM with `tmutil disable`, which stops it outright.
+
+    Neither endangers what is already on the destination. What they cost is the
+    run in progress — the expensive outcome precisely when a chain has been
+    failing and one attempt has finally started to land.
+
+    → Both refuse while a backup is running; `SC_ALLOW_DURING_BACKUP=1`
+    overrides. Found while fixing it: the progress percentage both would print
+    was parsed with `[0-9.]+`, which truncates `2.466504299824327e-06` — a real
+    value ten seconds into a backup — at the exponent, rendering 0.0002% as
+    **246.7%**. One shared `sc_tm_progress_pct` now, instead of two copies of the
+    broken expression.
