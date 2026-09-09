@@ -122,6 +122,13 @@ jobs:
       - name: SwiftBar plugin renders
         run: |
           out=$(./extra/swiftbar/sparkling-clean.10m.sh)
-          echo "$out" | head -1 | grep -q "💾" || { echo "no menu bar title"; exit 1; }
+          # The title is an SF Symbol, not text: OK is an outline drive, WARN
+          # fills it, and only CRIT swaps the glyph and prepends the subject. The
+          # emoji this used to assert on went away in 66cc477. Match the glyph
+          # rather than merely "sfimage=", because a symbol name that does not
+          # exist renders as a blank menu bar item — a silent failure.
+          echo "$out" | head -1 \
+            | grep -qE 'sfimage=(internaldrive|internaldrive\.fill|exclamationmark\.triangle\.fill)$' \
+            || { echo "no menu bar title, or an unknown SF Symbol"; exit 1; }
           echo "$out" | grep -q -- "---" || { echo "no separator"; exit 1; }
           echo "$out"
