@@ -80,6 +80,33 @@ or title changes"*. Quitting and relaunching SwiftBar restores them until the
 next change; Refresh does not, because it reuses the same status item. See
 [swiftbar/SwiftBar#521](https://github.com/swiftbar/SwiftBar/issues/521).
 
+The real fix is the beta, which is notarized and signed by the same team as the
+stable build (`X93LWC49WV`):
+
+```bash
+curl -fsSLO https://github.com/swiftbar/SwiftBar/releases/download/v2.1.2-beta-3/SwiftBar.v2.1.2.b607.zip
+unzip -q SwiftBar.v2.1.2.b607.zip
+osascript -e 'quit app "SwiftBar"' ; sleep 3
+rm -rf /Applications/SwiftBar.app && ditto SwiftBar.app /Applications/SwiftBar.app
+open -a SwiftBar
+```
+
+Beta 3 is cumulative and carries two more fixes worth having. One restores
+plugin-name lookup for the `swiftbar://refreshplugin` URL
+([#527](https://github.com/swiftbar/SwiftBar/issues/527)) — that is what
+`sparkling-clean thin` calls, so the menu bar stops showing a stale snapshot
+warning the moment you thin rather than up to ten minutes later. The other
+preserves explicit SF Symbol rendering, which is how the menu bar icon is drawn.
+
+**Homebrew still records the stable version afterwards.** The cask is
+`auto_updates`, so brew will not revert it on its own — but a cask upgrade will,
+silently, and the grey submenus come back with it. That is also the rollback if
+you want one:
+
+```bash
+brew reinstall --cask swiftbar     # back to the stable build
+```
+
 On first launch SwiftBar asks which folder to use — point it at that one. It is
 notarized but ships quarantined, so macOS shows its standard first-run dialog;
 approve it in System Settings → Privacy & Security → Open Anyway.
