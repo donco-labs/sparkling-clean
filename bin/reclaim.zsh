@@ -32,6 +32,18 @@ local before=$(sc_free_bytes)
 print -r -- "${SC_BLD}sparkling-clean reclaim${SC_RST}  tier=$tier  mode=$( (( SC_APPLY )) && print APPLY || print DRY-RUN )"
 print -r -- "free before: $(sc_human $before)  ($(sc_pct_free)%)"
 
+# Refuse to start on top of a running backup. sc_tm_pause runs `tmutil disable`,
+# which does not wait politely — it stops the backup in progress. On a machine
+# whose chain is already struggling, silently killing the run you have been
+# waiting on is a far worse outcome than reclaiming ten minutes later.
+if (( SC_APPLY )) && sc_tm_running && [[ -z ${SC_ALLOW_DURING_BACKUP:-} ]]; then
+  sc_crit "a backup is running — refusing to reclaim"
+  sc_info "This pauses Time Machine before it starts, which aborts the backup in"
+  sc_info "progress. Your existing backups are not at risk; the run in flight is."
+  sc_info "Wait for it to finish, or set SC_ALLOW_DURING_BACKUP=1 to override."
+  exit 2
+fi
+
 # Pause TM so a fresh snapshot cannot re-pin what we delete. Trap restores it.
 (( SC_APPLY )) && sc_tm_pause
 

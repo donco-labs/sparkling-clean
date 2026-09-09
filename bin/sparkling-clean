@@ -59,6 +59,26 @@ case $cmd in
     print -r -- "only — backups on your Time Machine destination are untouched."
     print -r -- ""
     (( n == 0 )) && { print -r -- "Nothing to thin."; exit 0 }
+
+    # A backup in progress is reading from one of these snapshots, and this runs
+    # at the highest urgency with "free as much as possible". `man tmutil` makes
+    # no promise about a snapshot that is in use, so treat the running backup as
+    # the thing at risk. Nothing on the destination can be harmed either way --
+    # what you lose is the run in flight, which is the expensive part when a
+    # chain has been failing and one attempt has finally started to land.
+    if sc_tm_running; then
+      local prog=$(sc_tm_progress_pct)
+      print -r -- ""
+      print -r -- "A backup is RUNNING right now$( [[ -n $prog ]] && print -n " (${prog}%)" )."
+      print -r -- "Thinning these snapshots while it reads from them will most likely abort"
+      print -r -- "it. Your existing backups are not at risk — only the run in progress."
+      print -r -- "Let it finish first; thinning takes seconds and will still be there."
+      if [[ -z ${SC_ALLOW_DURING_BACKUP:-} ]]; then
+        print -r -- ""
+        print -r -- "Refusing. Set SC_ALLOW_DURING_BACKUP=1 to override."
+        exit 1
+      fi
+    fi
     # A confirmation prompt should be readable; 21 snapshot names are not.
     print -r -- "  oldest: $(sc_snapshot_list | head -1)"
     print -r -- "  newest: $(sc_snapshot_list | tail -1)"

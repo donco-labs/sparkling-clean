@@ -110,6 +110,20 @@ sc_thin_snapshots() {
 
 sc_tm_running() { tmutil status 2>/dev/null | grep -q 'Running = 1' }
 
+# Percent complete of the running backup, or empty if none / unreadable.
+#
+# tmutil reports a FRACTION, and early in a run it uses scientific notation --
+# "2.466504299824327e-06" is a real value from a backup ten seconds old. Matching
+# it with [0-9.]+ truncates at the exponent, so 0.0002% renders as 246.7%: a
+# progress display that reads "246%" on a backup that has barely started.
+sc_tm_progress_pct() {
+  local raw
+  raw=$(tmutil status 2>/dev/null \
+        | sed -nE 's/.*Percent"? = "([0-9.eE+-]+)".*/\1/p' | head -1)
+  [[ -n $raw ]] || return 1
+  printf '%.1f' $(( raw * 100 ))
+}
+
 # Epoch seconds of the last COMPLETED backup. Returns 1 if undeterminable --
 # callers must report "unknown", never assume healthy. A check that silently
 # reads OK when it cannot tell is worse than no check at all.

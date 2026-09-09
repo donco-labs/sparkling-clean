@@ -66,8 +66,8 @@ else
 fi
 
 if sc_tm_running; then
-  local prog=$(tmutil status 2>/dev/null | grep -oE 'Percent" = "[0-9.]+' | grep -oE '[0-9.]+$')
-  sc_info "backup RUNNING now$( [[ -n $prog ]] && printf ' (%.1f%%)' $(( prog * 100 )) )"
+  local prog=$(sc_tm_progress_pct)
+  sc_info "backup RUNNING now$( [[ -n $prog ]] && print -n " (${prog}%)" )"
 fi
 
 # ================================================ TM EXCLUSION HYGIENE ======
