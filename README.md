@@ -68,14 +68,8 @@ from.
 
 Quote the destination rather than backslash-escaping the space — the escape does
 not survive being copied out of a terminal or a rendered page. Create the folder
-first as well: SwiftBar has no plugin directory until its first launch, so `ln`
-fails on a missing target. Installed via Homebrew, the plugin lives under the
-formula prefix instead:
-
-```bash
-ln -sf "$(brew --prefix)/opt/sparkling-clean/libexec/extra/swiftbar/sparkling-clean.10m.sh" \
-       "$HOME/Library/Application Support/SwiftBar/"
-```
+first as well, as the `mkdir` above does: SwiftBar has no plugin directory until
+its first launch, so `ln` fails on a missing target.
 
 On first launch SwiftBar asks which folder to use — point it at that one. It is
 notarized but ships quarantined, so macOS shows its standard first-run dialog;

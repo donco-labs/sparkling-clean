@@ -165,9 +165,15 @@ if [[ -n $sizes ]]; then
   # No cap — this is a submenu and the whole point is seeing the shape of the
   # set. A floor instead, so trivial entries do not pad the list.
   : ${SC_WATCH_FLOOR:=104857600}          # 100 MB
+  # Each row opens the directory in Finder. That is worth having on its own,
+  # and it also fixes the header: macOS auto-enables menu items, so a submenu
+  # whose children carry no action leaves its PARENT disabled — "Watchlist"
+  # rendered grey next to a black "About" purely because About has href= rows.
+  # The path is quoted because several of these contain spaces.
   print -r -- "$sizes" | while IFS=$'\t' read -r b pth; do
     (( b >= SC_WATCH_FLOOR )) || continue
-    printf -- '--%10s  %s\n' "$(sc_human $b)" "${pth/#$HOME/~}"
+    printf -- '--%10s  %s | bash=/usr/bin/open param1="%s" terminal=false\n' \
+      "$(sc_human $b)" "${pth/#$HOME/~}" "$pth"
   done
   local tot=$(print -r -- "$sizes" | awk -F'\t' '{s+=$1} END{print s+0}')
   local cnt=$(print -r -- "$sizes" | grep -c .)

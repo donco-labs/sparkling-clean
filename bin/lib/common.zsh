@@ -566,12 +566,14 @@ sc_free_delta() {  # reads "<epoch> <bytes>" lines on stdin
   (( ${#b} < 2 )) && return 1
   local d=$(( b[-1] - b[1] )) hours=$(( (e[-1] - e[1]) / 3600 ))
   local sign="+"; (( d < 0 )) && { sign="−"; d=$(( -d )) }
+  # Each branch carries its own preposition. Appending a bare window to a fixed
+  # "over " produced "−4.6 GB over under an hour" for any sample under an hour.
   local window
-  if   (( hours >= 48 )); then window="$(( hours / 24 ))d"
-  elif (( hours >= 1  )); then window="${hours}h"
-  else                         window="under an hour"
+  if   (( hours >= 48 )); then window="over $(( hours / 24 ))d"
+  elif (( hours >= 1  )); then window="over ${hours}h"
+  else                         window="in under an hour"
   fi
-  print -r -- "${sign}$(sc_human $d) over ${window}"
+  print -r -- "${sign}$(sc_human $d) ${window}"
 }
 
 # --------------------------------------------------------------- execution --
