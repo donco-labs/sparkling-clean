@@ -92,6 +92,60 @@ jobs:
             done
           '
 
+      - name: A fresh backup date does not mask failing attempts
+        # The fault this check exists for: SnapshotDates records completions
+        # only, so a Mac that attempts hourly and fails every time still reads
+        # "0d ago". Age going OK must not be able to make the run OK while
+        # RESULT is non-zero -- that is precisely how a chain rots unseen.
+        run: |
+          zsh -c '
+            source bin/lib/common.zsh
+            export SC_TM_STATE=$(mktemp -d)/tm.state
+            sc_tm_enabled()          { return 0 }
+            sc_tm_days_since_backup() { print -r -- 0 }      # backed up "today"
+            sc_tm_last_backup_epoch() { print -r -- 1700000000 }
+            sc_tm_last_result()       { print -r -- 26 }     # ...and it failed
+            sc_run_health_checks
+            seen=0
+            for c in $SC_CHECKS; do
+              [[ $(sc_check_name $c) == Attempts ]] || continue
+              seen=1
+              [[ $(sc_check_level $c) != OK ]] || { print "FAIL: failing attempt reported OK"; exit 1 }
+              print "correctly non-OK: $(sc_check_headline $c)"
+            done
+            (( seen )) || { print "FAIL: no Attempts check emitted"; exit 1 }
+            [[ $(sc_overall_level) != OK ]] || { print "FAIL: overall level OK despite failing backups"; exit 1 }
+          '
+
+      - name: Unreadable attempt outcome reports UNKNOWN, never OK
+        run: |
+          zsh -c '
+            source bin/lib/common.zsh
+            sc_tm_enabled()     { return 0 }
+            sc_tm_last_result() { return 1 }               # simulate unreadable prefs
+            sc_run_health_checks
+            for c in $SC_CHECKS; do
+              [[ $(sc_check_name $c) == Attempts ]] || continue
+              [[ $(sc_check_level $c) != OK ]] || { print "FAIL: unreadable outcome reported OK"; exit 1 }
+              print "correctly non-OK: $(sc_check_headline $c)"
+            done
+          '
+
+      - name: A landed backup clears the failure clock
+        # Keyed on the last-success date so a chain that recovers does not carry
+        # its old clock into an unrelated later failure and jump straight to CRIT.
+        run: |
+          zsh -c '
+            source bin/lib/common.zsh
+            export SC_TM_STATE=$(mktemp -d)/tm.state
+            printf "%s\t%s\n" stale stamp > $SC_TM_STATE
+            sc_tm_enabled()     { return 0 }
+            sc_tm_last_result() { print -r -- 0 }
+            sc_run_health_checks
+            [[ -e $SC_TM_STATE ]] && { print "FAIL: clock survived a successful backup"; exit 1 }
+            print "clock cleared"
+          '
+
       - name: Worst check always names a subject
         run: |
           zsh -c '

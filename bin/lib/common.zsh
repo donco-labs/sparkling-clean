@@ -102,6 +102,12 @@ sc_thin_snapshots() {
 : ${SC_TM_WARN_D:=2}
 : ${SC_TM_CRIT_D:=7}
 
+# Hours a chain may keep failing before the verdict goes critical. Deliberately
+# much tighter than SC_TM_CRIT_D: age is a lagging signal and a failing attempt
+# is a live one, so it does not get a week's grace.
+: ${SC_TM_FAIL_CRIT_H:=12}
+: ${SC_TM_STATE:=$SC_STATE_DIR/tm.state}
+
 sc_tm_running() { tmutil status 2>/dev/null | grep -q 'Running = 1' }
 
 # Epoch seconds of the last COMPLETED backup. Returns 1 if undeterminable --
@@ -129,6 +135,67 @@ sc_tm_last_backup_human() {
   e=$(sc_tm_last_backup_epoch) || { print -r -- "unknown"; return 1 }
   date -r $e '+%Y-%m-%d %H:%M'
 }
+
+# ---- did the last attempt actually SUCCEED? --------------------------------
+# Age cannot see this, and that is the gap that lets a backup die quietly. The
+# date above comes from SnapshotDates, which records completions only -- so a
+# machine that attempts hourly and fails every single time simply freezes the
+# number and keeps reporting "0d ago". By the time age drifts past SC_TM_WARN_D
+# the destination is already days behind, and the guard was green throughout.
+#
+# RESULT is the outcome of the most recent attempt: 0 succeeded, non-zero
+# failed. Same unprivileged `defaults read` the date comes from, which is the
+# point -- the plist is not world-readable and `tmutil latestbackup` needs Full
+# Disk Access, so under launchd this is the only route to the fact.
+#
+# One RESULT per configured destination, and the worst wins. On the single
+# destination almost everyone has, that is exactly right; if you rotate between
+# a NAS and a portable disk, read a failure as "at least one is failing", since
+# the one sitting in a drawer will legitimately report stale.
+sc_tm_last_result() {
+  local r
+  r=$(defaults read /Library/Preferences/com.apple.TimeMachine 2>/dev/null \
+      | sed -nE 's/^[[:space:]]*RESULT[[:space:]]*=[[:space:]]*([0-9]+);.*/\1/p' \
+      | sort -rn | head -1)
+  [[ -n $r ]] || return 1
+  print -r -- $r
+}
+
+# Only codes this toolkit has actually seen in
+#   log show --predicate 'subsystem == "com.apple.TimeMachine"'
+# are named. Everything else is reported as a bare number: a wrong cause sends
+# you to the wrong subsystem, which is worse than an honest "look it up".
+sc_tm_result_cause() {
+  case ${1:-} in
+    (26) print -r -- "the destination went away mid-copy (network dropped)" ;;
+    (70) print -r -- "the backup disk image detached mid-copy" ;;
+    (*)  print -r -- "backupd reported error ${1:-?}" ;;
+  esac
+}
+
+# How long it has been failing. RESULT says the last attempt failed; it cannot
+# say whether that started an hour ago or last week, and that difference is the
+# whole verdict. The unified log holds the history, but `log show` over a
+# multi-day window costs seconds -- unacceptable in a check the menu bar polls
+# every ten minutes -- and it rolls off anyway. So record the first failing
+# observation and keep it.
+#
+# Keyed on the last-success date, not just on failure: when a backup finally
+# lands, SnapshotDates advances, the anchor changes and the stamp is discarded.
+# A later, unrelated failure then starts its own clock instead of inheriting an
+# old one and jumping straight to CRIT.
+sc_tm_failing_since() {  # $1 = anchor (last-success epoch, or "none")
+  local anchor=${1:-none} prev="" since=""
+  [[ -r $SC_TM_STATE ]] && IFS=$'\t' read -r prev since < $SC_TM_STATE
+  if [[ $prev != $anchor || -z $since ]]; then
+    since=$(date +%s)
+    mkdir -p ${SC_TM_STATE:h}
+    printf '%s\t%s\n' "$anchor" "$since" > $SC_TM_STATE
+  fi
+  print -r -- $since
+}
+
+sc_tm_failing_clear() { rm -f $SC_TM_STATE 2>/dev/null }
 
 sc_tm_enabled() {
   local v=$(defaults read /Library/Preferences/com.apple.TimeMachine AutoBackup 2>/dev/null)
@@ -324,7 +391,9 @@ sc_run_health_checks() {
   fi
 
   # -- backups on at all -------------------------------------------------
+  local tm_on=0
   if sc_tm_enabled; then
+    tm_on=1
     sc_check OK Backups "enabled"
   else
     sc_check CRIT Backups "off" "Time Machine automatic backups are switched off — nothing is being backed up."
@@ -342,6 +411,38 @@ sc_run_health_checks() {
     fi
   else
     sc_check WARN Backup "age unknown" "Could not read the last backup date from Time Machine preferences, so this is unverified rather than healthy."
+  fi
+
+  # -- are those attempts succeeding -------------------------------------
+  # Age and outcome are different facts and get different rows. A chain can be
+  # "0d ago" and failing every hour -- that is the normal shape of this fault,
+  # not an edge case -- so folding the two together would let the healthy number
+  # mask the broken one. Skipped when Time Machine is off: the CRIT above
+  # already says nothing is being backed up, and a stale RESULT adds no signal.
+  if (( tm_on )); then
+    local res
+    if res=$(sc_tm_last_result); then
+      if (( res == 0 )); then
+        sc_tm_failing_clear
+        sc_check OK Attempts "last ok"
+      else
+        local anchor since hours cause
+        anchor=$(sc_tm_last_backup_epoch) || anchor=none
+        since=$(sc_tm_failing_since $anchor)
+        hours=$(( ( $(date +%s) - since ) / 3600 ))
+        cause=$(sc_tm_result_cause $res)
+        if (( hours >= SC_TM_FAIL_CRIT_H )); then
+          sc_check CRIT Attempts "failing ${hours}h" \
+            "Every backup attempt has failed for ${hours}h — ${cause} (code ${res}). Backups are still starting on schedule; none of them are reaching the destination. The last one that completed was $(sc_tm_last_backup_human)."
+        else
+          sc_check WARN Attempts "failing" \
+            "The most recent backup attempt failed — ${cause} (code ${res}). The last completed backup was $(sc_tm_last_backup_human), so the age above is still plausible; it will stay that way while the chain rots."
+        fi
+      fi
+    else
+      sc_check WARN Attempts "unknown" \
+        "Could not read the outcome of the last backup attempt from Time Machine preferences, so this is unverified rather than healthy."
+    fi
   fi
 
   # -- snapshots holding space -------------------------------------------

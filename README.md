@@ -142,6 +142,7 @@ A launchd LaunchAgent labelled `com.sparklingclean.diskguard`. Checks every
 | Plist template (in git) | `launchd/com.sparklingclean.diskguard.plist` |
 | Health log | `~/.local/state/sparkling-clean/sparkling-clean.log` |
 | Notification state | `~/.local/state/sparkling-clean/guard.state` |
+| Backup-failure clock | `~/.local/state/sparkling-clean/tm.state` |
 | launchd stdout / stderr | `.guard.out.log` / `.guard.err.log` (gitignored) |
 
 The template carries a `__SC_ROOT__` placeholder that `make install-guard`
@@ -174,7 +175,7 @@ Signals come in two tiers:
 
 | Tier | Contents | Escalates | Notifies |
 |---|---|---|---|
-| **CHECK** | disk %, Time Machine on/off, backup age, snapshot count | yes | yes |
+| **CHECK** | disk %, Time Machine on/off, backup age, last attempt outcome, snapshot count | yes | yes |
 | **NOTE** | jetsam / panic history | no | no |
 
 Jetsam reports are evidence something *already happened*. Treating them as an
@@ -191,6 +192,7 @@ stale`, not `Disk CRIT` on a machine with 121 GB free.
   OK    Disk       22% free
   OK    Backups    enabled
   OK    Backup     0d ago
+  OK    Attempts   last ok
   OK    Snapshots  2
   note  2 jetsam/panic report(s) in the last 3 days (past events, not a current fault)
 
@@ -198,7 +200,18 @@ OK    healthy
 ```
 
 Thresholds, overridable by env: `SC_WARN_PCT` (15), `SC_CRIT_PCT` (10),
-`SC_TM_WARN_D` (2), `SC_TM_CRIT_D` (7), `SC_RENOTIFY_H` (12).
+`SC_TM_WARN_D` (2), `SC_TM_CRIT_D` (7), `SC_TM_FAIL_CRIT_H` (12),
+`SC_RENOTIFY_H` (12).
+
+**Backup age and backup outcome are separate checks, and they have to be.** Age
+is read from `SnapshotDates`, which only ever records completions — so a Mac
+attempting hourly and failing every single time still reports `0d ago`, and goes
+on reporting it until the number finally drifts past `SC_TM_WARN_D` two days
+later. `Attempts` reads `RESULT` instead, the outcome of the most recent attempt,
+and names the cause: `Attempts CRIT: failing 33h — the destination went away
+mid-copy (network dropped)`. It warns on the first failing check and escalates
+after `SC_TM_FAIL_CRIT_H` hours, so a chain that stops working is caught on the
+next two-hourly check rather than on day three.
 
 ## What is here
 
@@ -242,6 +255,20 @@ silently, for months. Check the age of the last *completed* backup:
 ```bash
 defaults read /Library/Preferences/com.apple.TimeMachine | sed -n '/SnapshotDates/,/);/p' | tail -3
 ```
+
+That date is necessary but not sufficient: it moves only on success, so it looks
+healthy for a full day after the chain breaks. Ask what the *last attempt* did —
+`0` is success, anything else is the failure code:
+
+```bash
+defaults read /Library/Preferences/com.apple.TimeMachine | grep RESULT
+log show --last 24h --predicate 'subsystem == "com.apple.TimeMachine"' \
+  | grep BACKUP_FAILED
+```
+
+Both are unprivileged, which is why the guard uses the first one — the plist is
+not world-readable and `tmutil latestbackup` needs Full Disk Access, which a
+LaunchAgent does not have.
 
 And a chain that *is* working can still be mostly garbage — `make report` flags
 large reconstructible directories (container images, package caches, toolchains)
