@@ -83,8 +83,11 @@ case $cmd in
     print -r -- "  oldest: $(sc_snapshot_list | head -1)"
     print -r -- "  newest: $(sc_snapshot_list | tail -1)"
     print -r -- ""
-    print -r -- "Runs: sudo tmutil thinlocalsnapshots / 999999999999 4"
-    print -r -- "      (999999999999 = free as much as possible; 4 = highest urgency)"
+    print -r -- "Deletes all but the NEWEST snapshot, one at a time:"
+    print -r -- "      sudo tmutil deletelocalsnapshots <date>"
+    print -r -- "The newest is kept because Time Machine uses it as the baseline for"
+    print -r -- "its next incremental; older ones pin the most deleted data anyway."
+    print -r -- "SC_THIN_ALL=1 removes every snapshot instead, baseline included."
     print -r -- ""
     # Shell startup can be noisy — an oh-my-zsh update prompt, a version-manager
     # notice — and anything left in the input buffer gets eaten by the next read,
@@ -104,7 +107,11 @@ case $cmd in
     [[ $reply == [yY]* ]] || { print -r -- "Cancelled."; exit 0 }
 
     local before=$(sc_free_bytes)
-    sudo tmutil thinlocalsnapshots / 999999999999 4
+    # Through the shared helper, not a second copy of the command. The inline
+    # version here silently missed the change that made thinning keep Time
+    # Machine's baseline, exactly as an inline copy of the progress-percent
+    # expression missed its fix.
+    sc_thin_snapshots
     local after=$(sc_free_bytes)
     print -r -- ""
     print -r -- "Reclaimed $(sc_human $(( after - before ))). Snapshots now: $(sc_snapshot_count)."

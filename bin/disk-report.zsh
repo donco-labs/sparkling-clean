@@ -37,7 +37,7 @@ if (( snaps == 0 )); then
 else
   sc_warn "$snaps local snapshot(s) holding space from deleted files:"
   sc_snapshot_list | sed 's/^/        /'
-  sc_info "reclaim.zsh thins these automatically; or: sudo tmutil thinlocalsnapshots / 999999999999 4"
+  sc_info "reclaim.zsh thins these automatically; or: sparkling-clean thin (keeps the newest)"
 fi
 
 # ====================================================== 3. TIME MACHINE =====

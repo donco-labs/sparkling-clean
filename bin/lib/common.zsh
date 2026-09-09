@@ -84,9 +84,42 @@ sc_size_h() { sc_human $(sc_size_of "$1") }
 sc_snapshot_list()  { tmutil listlocalsnapshots / 2>/dev/null | grep -v '^Snapshots for' }
 sc_snapshot_count() { sc_snapshot_list | grep -c . }
 
+# Keep the newest local snapshot by default.
+#
+# `thinlocalsnapshots / 999999999999 4` is "free as much as possible, highest
+# urgency", and it takes everything -- including the snapshot Time Machine uses
+# as the baseline for its next incremental. Measured on the source host: 14
+# snapshots to 0, 19 GB freed, and six hours later backupd logged
+#
+#   Failed to mount reference snapshot: com.apple.TimeMachine.2026-09-08-205130.local
+#
+# and had to establish what changed the expensive way. Older snapshots pin the
+# most deleted data anyway, so keeping the newest costs a little space and saves
+# the next backup real work. SC_THIN_ALL=1 restores the old behaviour.
+: ${SC_THIN_ALL:=}
+
 sc_thin_snapshots() {
-  sc_info "thinning local snapshots (external TM backups unaffected)…"
-  sudo tmutil thinlocalsnapshots / 999999999999 4 2>&1 | sed 's/^/      /'
+  local -a snaps
+  # Sorted, not trusting tmutil's output order: the names are
+  # ...TimeMachine.YYYY-MM-DD-HHMMSS.local, so lexical order is chronological.
+  snaps=( ${(f)"$(sc_snapshot_list | sort)"} )
+  (( ${#snaps} )) || { sc_info "no local snapshots to thin"; return 0 }
+
+  if [[ -n $SC_THIN_ALL ]]; then
+    sc_info "thinning ALL local snapshots (external TM backups unaffected)…"
+    sudo tmutil thinlocalsnapshots / 999999999999 4 2>&1 | sed 's/^/      /'
+    return
+  fi
+
+  # Names look like com.apple.TimeMachine.2026-09-08-205130.local;
+  # deletelocalsnapshots wants the bare YYYY-MM-DD-HHMMSS.
+  local keep=${snaps[-1]} snap date
+  sc_info "thinning $(( ${#snaps} - 1 )) local snapshot(s), keeping the newest"
+  sc_info "keeping ${keep} — Time Machine's baseline for the next incremental"
+  for snap in ${snaps[1,-2]}; do
+    date=${${snap##*TimeMachine.}%.local}
+    sudo tmutil deletelocalsnapshots "$date" 2>&1 | sed 's/^/      /'
+  done
 }
 
 # ----------------------------------------------------------- Time Machine --

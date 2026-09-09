@@ -87,6 +87,24 @@ print -r -- "---"
 print -r -- "sparkling-clean · disk and backup health | size=11 color=gray href=https://github.com/donco-labs/sparkling-clean"
 print -r -- "---"
 
+# SwiftBar sizes the dropdown to its longest row, and check details are full
+# sentences: one measured 235 characters and stretched the menu across most of
+# the screen. Wrap rather than truncate -- the detail is the part that says what
+# to do about the problem, so losing its tail is worse than using three rows.
+#
+# A literal "|" would be read as the start of SwiftBar's parameter list and
+# silently eat the rest of the row, so it is replaced before emitting.
+sc_menu_wrapped() {   # $1 = text · $2 = leading indent · $3 = params
+  local text=${1//|/\u2502} line
+  print -r -- "$text" | fold -s -w 64 | while IFS= read -r line; do
+    [[ -n ${line// } ]] || continue
+    # fold -s leaves the break space on the end of each line; EXTENDED_GLOB is
+    # not set here, so trim it the plain way rather than with "${line%% ##}".
+    while [[ $line == *' ' ]]; do line=${line% }; done
+    print -r -- "${2}${line} | ${3}"
+  done
+}
+
 # One line per check, colour-coded, worst first is not needed — order is stable
 # and matches the report.
 print -r -- "$json" \
@@ -102,7 +120,7 @@ print -r -- "$json" \
         (*)    print -r -- "✓ ${n}: ${h}"                ;;
       esac
       # Explanation goes here, where there is room for it — never in the title.
-      [[ $l != OK && -n $d && $d != "$h" ]] && print -r -- "   ${d} | size=11 color=gray"
+      [[ $l != OK && -n $d && $d != "$h" ]] && sc_menu_wrapped "$d" "   " "size=11 color=gray"
     done
 
 # The percentage answers "is this a problem"; the absolute figure answers "how
@@ -128,7 +146,7 @@ local notes_blob=$(print -r -- "$json" | sed -E 's/.*"notes":\[//; s/\].*//')
 if [[ -n $notes_blob ]]; then
   print -r -- "$notes_blob" | tr ',' '\n' | sed -E 's/^"//; s/"$//' \
     | while read -r note; do
-        [[ -n $note ]] && print -r -- "${note} | size=11 color=gray"
+        [[ -n $note ]] && sc_menu_wrapped "$note" "" "size=11 color=gray"
       done
 fi
 

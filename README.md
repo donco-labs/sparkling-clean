@@ -71,6 +71,15 @@ not survive being copied out of a terminal or a rendered page. Create the folder
 first as well, as the `mkdir` above does: SwiftBar has no plugin directory until
 its first launch, so `ln` fails on a missing target.
 
+**Submenus grey out on SwiftBar 2.1.0–2.1.1.** The Watchlist and About headers
+turn grey and stop opening after the plugin refreshes with any changed row —
+which, for a health monitor, is constantly. It is a SwiftBar bug, not a plugin
+one: 2.1.0 reworked incremental menu updates to reuse menu items, and 2.1.2
+BETA 1 lists *"Fixed submenu parents becoming disabled after incremental child
+or title changes"*. Quitting and relaunching SwiftBar restores them until the
+next change; Refresh does not, because it reuses the same status item. See
+[swiftbar/SwiftBar#521](https://github.com/swiftbar/SwiftBar/issues/521).
+
 On first launch SwiftBar asks which folder to use — point it at that one. It is
 notarized but ships quarantined, so macOS shows its standard first-run dialog;
 approve it in System Settings → Privacy & Security → Open Anyway.
