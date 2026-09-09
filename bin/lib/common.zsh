@@ -211,6 +211,49 @@ sc_tm_failing_since() {  # $1 = anchor (last-success epoch, or "none")
 
 sc_tm_failing_clear() { rm -f $SC_TM_STATE 2>/dev/null }
 
+# Hold the clock at now, keeping the anchor. Used while the destination is out
+# of reach: time spent away must not accumulate toward the CRIT threshold, or
+# coming home to a single failed attempt would escalate instantly.
+sc_tm_failing_reset() {
+  mkdir -p ${SC_TM_STATE:h}
+  printf '%s\t%s\n' "${1:-none}" "$(date +%s)" > $SC_TM_STATE
+}
+
+# Is the destination reachable from where this machine is right now?
+#   0 reachable · 1 not reachable · 2 cannot tell
+#
+# Time Machine reports a laptop that is simply on the wrong network with the
+# same BACKUP_FAILED_DISCONNECTED_NETWORK (26) it uses for a link that died
+# mid-copy. It does not distinguish "your NAS is at home and you are not" from
+# "your NAS is here and the transfer keeps breaking", so ask the network.
+#
+# Only ever called when the last attempt FAILED, so the cost lands on the
+# abnormal path: measured 0.02s when the destination answers, a 1s ceiling when
+# it does not. A healthy machine never pays it.
+sc_tm_destination_reachable() {
+  local info host mp
+  info=$(tmutil destinationinfo 2>/dev/null) || return 2
+  [[ -n $info ]] || return 2
+
+  # A local disk is reachable exactly when it is mounted.
+  if print -r -- "$info" | grep -q '^Kind[[:space:]]*:[[:space:]]*Local'; then
+    mp=$(print -r -- "$info" | sed -nE 's/^Mount Point[[:space:]]*:[[:space:]]*(.+)$/\1/p' | head -1)
+    [[ -n $mp ]] || return 2
+    [[ -d $mp ]] && return 0 || return 1
+  fi
+
+  # Network. The URL carries a Bonjour SERVICE name, not a host name --
+  # "MyCloudEX2Ultra._smb._tcp.local." does not resolve; strip the service
+  # labels off it to get "MyCloudEX2Ultra.local", which does.
+  host=$(print -r -- "$info" | sed -nE 's|^URL[[:space:]]*:[[:space:]]*[a-z]+://([^/]+)/.*|\1|p' | head -1)
+  host=${host##*@}                    # drop any user@
+  host=${host/._smb._tcp/}
+  host=${host/._afpovertcp._tcp/}
+  host=${host%.}                      # trailing dot from the Bonjour name
+  [[ -n $host ]] || return 2
+  ping -c 1 -t 1 "$host" >/dev/null 2>&1 && return 0 || return 1
+}
+
 sc_tm_enabled() {
   local v=$(defaults read /Library/Preferences/com.apple.TimeMachine AutoBackup 2>/dev/null)
   [[ $v == 1 ]]
@@ -440,17 +483,40 @@ sc_run_health_checks() {
         sc_tm_failing_clear
         sc_check OK Attempts "last ok"
       else
-        local anchor since hours cause
+        local anchor since hours cause reach
         anchor=$(sc_tm_last_backup_epoch) || anchor=none
-        since=$(sc_tm_failing_since $anchor)
-        hours=$(( ( $(date +%s) - since ) / 3600 ))
         cause=$(sc_tm_result_cause $res)
-        if (( hours >= SC_TM_FAIL_CRIT_H )); then
-          sc_check CRIT Attempts "failing ${hours}h" \
-            "Every backup attempt has failed for ${hours}h — ${cause} (code ${res}). Backups are still starting on schedule; none of them are reaching the destination. The last one that completed was $(sc_tm_last_backup_human)."
+        sc_tm_destination_reachable; reach=$?
+
+        # Being away from the destination is not a fault. A laptop on a
+        # different network cannot reach the NAS at home, and Time Machine
+        # reports that with the same code 26 a genuine mid-copy drop produces.
+        #
+        # It stays a WARN, because backups are genuinely not happening and a
+        # check that reads OK because you are travelling is the same lie this
+        # toolkit exists to catch. What it does not do is escalate: the Backup
+        # age check above already owns "away too long", and duplicating that
+        # here would put two rows at CRIT for one condition.
+        #
+        # Only a definite "not reachable" (1) suppresses escalation. A probe
+        # that cannot tell (2) takes the normal path -- never go quiet on
+        # uncertainty.
+        if (( reach == 1 )); then
+          # Hold the clock, or coming home to one failed attempt would escalate
+          # instantly on time that was only ever spent out of range.
+          sc_tm_failing_reset $anchor
+          sc_check WARN Attempts "destination away" \
+            "The destination is not reachable from this network, so nothing can be backed up (attempts report code ${res}). Expected while you are away; it should clear when you are back on its network. Last completed backup $(sc_tm_last_backup_human) — if you stay away, the Backup row above is what escalates."
         else
-          sc_check WARN Attempts "failing" \
-            "The most recent backup attempt failed — ${cause} (code ${res}). The last completed backup was $(sc_tm_last_backup_human), so the age above is still plausible; it will stay that way while the chain rots."
+          since=$(sc_tm_failing_since $anchor)
+          hours=$(( ( $(date +%s) - since ) / 3600 ))
+          if (( hours >= SC_TM_FAIL_CRIT_H )); then
+            sc_check CRIT Attempts "failing ${hours}h" \
+              "Every backup attempt has failed for ${hours}h — ${cause} (code ${res}). The destination is reachable, so this is not distance: backups are starting on schedule and none are landing. The last one that completed was $(sc_tm_last_backup_human)."
+          else
+            sc_check WARN Attempts "failing" \
+              "The most recent backup attempt failed — ${cause} (code ${res}). The last completed backup was $(sc_tm_last_backup_human), so the age above is still plausible; it will stay that way while the chain rots."
+          fi
         fi
       fi
     else

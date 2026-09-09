@@ -131,6 +131,55 @@ jobs:
             done
           '
 
+      - name: An unreachable destination warns but does not escalate
+        # Time Machine reports a laptop on the wrong network with the same
+        # code 26 it uses for a link that died mid-copy. Being away is not a
+        # fault, so it must not reach CRIT -- but it must not read OK either,
+        # because backups genuinely are not happening.
+        run: |
+          zsh -c '
+            source bin/lib/common.zsh
+            export SC_TM_STATE=$(mktemp -d)/tm.state
+            sc_tm_enabled()                 { return 0 }
+            sc_tm_last_backup_epoch()       { print -r -- 1757370669 }
+            sc_tm_last_result()             { print -r -- 26 }
+            sc_tm_destination_reachable()   { return 1 }
+            printf "%s\t%s\n" 1757370669 $(( $(date +%s) - 72*3600 )) > $SC_TM_STATE
+            sc_run_health_checks
+            seen=0
+            for c in $SC_CHECKS; do
+              [[ $(sc_check_name $c) == Attempts ]] || continue
+              seen=1
+              [[ $(sc_check_level $c) == WARN ]] || { print "FAIL: expected WARN, got $(sc_check_level $c)"; exit 1 }
+              print "correctly WARN: $(sc_check_headline $c)"
+            done
+            (( seen )) || { print "FAIL: no Attempts check"; exit 1 }
+            # Time spent away must not accumulate toward the CRIT clock.
+            age=$(( ( $(date +%s) - $(cut -f2 $SC_TM_STATE) ) / 3600 ))
+            (( age < 1 )) || { print "FAIL: clock not held, ${age}h"; exit 1 }
+            print "clock held at now"
+          '
+
+      - name: An unknown reachability probe still escalates
+        # Never go quiet on uncertainty -- that is the failure this whole
+        # toolkit exists to catch. Only a definite "not reachable" suppresses.
+        run: |
+          zsh -c '
+            source bin/lib/common.zsh
+            export SC_TM_STATE=$(mktemp -d)/tm.state
+            sc_tm_enabled()               { return 0 }
+            sc_tm_last_backup_epoch()     { print -r -- 1757370669 }
+            sc_tm_last_result()           { print -r -- 26 }
+            sc_tm_destination_reachable() { return 2 }        # cannot tell
+            printf "%s\t%s\n" 1757370669 $(( $(date +%s) - 13*3600 )) > $SC_TM_STATE
+            sc_run_health_checks
+            for c in $SC_CHECKS; do
+              [[ $(sc_check_name $c) == Attempts ]] || continue
+              [[ $(sc_check_level $c) == CRIT ]] || { print "FAIL: uncertainty went quiet: $(sc_check_level $c)"; exit 1 }
+              print "correctly CRIT despite an unreadable probe: $(sc_check_headline $c)"
+            done
+          '
+
       - name: A landed backup clears the failure clock
         # Keyed on the last-success date so a chain that recovers does not carry
         # its old clock into an unrelated later failure and jump straight to CRIT.
