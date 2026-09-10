@@ -123,12 +123,6 @@ print -r -- "$json" \
       [[ $l != OK && -n $d && $d != "$h" ]] && sc_menu_wrapped "$d" "   " "size=11 color=gray"
     done
 
-# The percentage answers "is this a problem"; the absolute figure answers "how
-# much room do I have", and people want both. Only the disk row gets it — the
-# others have no second number worth showing.
-local freeh=$(sc_human $(sc_free_bytes) 2>/dev/null)
-[[ -n $freeh ]] && print -r -- "   ${freeh} free | size=11 color=gray"
-
 # A point-in-time check tells you where you are; the trend tells you where you
 # are going, which is the view that would have caught the original incident
 # months earlier.

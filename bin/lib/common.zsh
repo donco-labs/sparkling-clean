@@ -183,6 +183,151 @@ sc_tm_last_backup_human() {
   date -r $e '+%Y-%m-%d %H:%M'
 }
 
+# ---- how often is it MEANT to run? -----------------------------------------
+# AutoBackupInterval is the configured cadence and is readable unprivileged.
+# It is a target, not a schedule: macOS hands the actual firing to its activity
+# scheduler, which defers on power, thermal state, network and what the user is
+# doing. Measured gaps on one laptop against a 3600s setting ran 29 to 646
+# minutes. So this reports the POLICY and nothing else -- a rendered "next
+# backup at 21:51" would be wrong more often than right, and stating a time
+# confidently and wrongly is the failure this toolkit was written about.
+sc_tm_interval_human() {
+  local v=$(defaults read /Library/Preferences/com.apple.TimeMachine AutoBackupInterval 2>/dev/null)
+  [[ $v == <-> ]] || return 1
+  (( v == 3600 )) && { print -r -- "hourly"; return 0 }
+  (( v % 3600 == 0 )) && { print -r -- "every $(( v / 3600 ))h"; return 0 }
+  (( v >= 60 ))       && { print -r -- "every $(( v / 60 ))m";   return 0 }
+  print -r -- "every ${v}s"
+}
+
+# ---- what did the last backup actually move? -------------------------------
+# backupd writes a per-pass summary at INFO level -- items added and the size of
+# the whole backup, both logical and physical. Physical is the interesting one:
+# it is what landed on the destination.
+#
+# Two hard limits shape this, and both are why it is cached rather than read:
+#
+#   Cost.      `log show --info` runs 1.0-1.4s. The menu bar renders every ten
+#              minutes; paying that there would make the monitor a source of
+#              the load it exists to watch for.
+#   Retention. The info-level store keeps roughly 15 hours. Measured: a 3-day
+#              window returns byte-identical output to a 12-hour one. So this
+#              is blank precisely when backups have been failing for days --
+#              which is exactly when it matters least, the Backup age row
+#              having already gone CRIT by then.
+#
+# Cached against the backup it describes, not against a clock: one backup, one
+# lookup, forever. A backup whose log has aged out is recorded as unavailable
+# so the expensive query is not retried every two hours for data that is gone.
+: ${SC_TM_LAST_CACHE:=$SC_STATE_DIR/tm-last.tsv}
+: ${SC_TM_LOG_MAX_H:=15}
+
+# "1 hour, 47 minutes, 33.000 seconds" -> "1h47m"; "9.264 seconds" -> "9s".
+# The menu bar has no room for prose and the seconds are noise on anything
+# that ran for minutes.
+#
+# Pulled with grep rather than sed: a leading ".*" is greedy and swallows all
+# but the last digit of the number it is supposed to be capturing, so "47
+# minutes" captured as 7 and "11 minutes" as 1.
+sc_tm_elapsed_short() {
+  local t=$1 h m sec
+  h=$(print -r -- "$t"   | grep -oE '[0-9]+ hour'                | grep -oE '^[0-9]+')
+  m=$(print -r -- "$t"   | grep -oE '[0-9]+ minute'              | grep -oE '^[0-9]+')
+  sec=$(print -r -- "$t" | grep -oE '[0-9]+(\.[0-9]+)? second'   | grep -oE '^[0-9]+')
+  : ${h:=0} ${m:=0} ${sec:=0}
+  if   (( h ));  then print -r -- "${h}h${m}m"
+  elif (( m ));  then print -r -- "${m}m"
+  else                print -r -- "${sec}s"
+  fi
+}
+
+# backupd prints two decimals ("172.59 GB"), sc_human prints one ("108.8 GB").
+# Both numbers land in the same dropdown, so round the log's to match rather
+# than let the menu show two different conventions a line apart.
+sc_tm_norm_size() {
+  local v=$1
+  [[ $v == <->.<->*' '* || $v == <->' '* ]] || { print -r -- "$v"; return }
+  awk '{ printf (($1 == int($1)) ? "%d %s\n" : "%.1f %s\n"), $1, $2 }' <<< "$v"
+}
+
+# Expensive. Call from the guard, never from a render path.
+sc_tm_last_stats_refresh() {
+  local e; e=$(sc_tm_last_backup_epoch) || return 1
+  mkdir -p ${SC_TM_LAST_CACHE:h}
+
+  local age_h=$(( ( $(date +%s) - e ) / 3600 ))
+  # Past the retention horizon there is nothing to find. Record that against
+  # this backup so the query is not repeated for it.
+  if (( age_h >= SC_TM_LOG_MAX_H )); then
+    printf '%s\t\t\t\n' "$e" > $SC_TM_LAST_CACHE
+    return 0
+  fi
+
+  # Window the query to the backup itself plus an hour of slack, so a machine
+  # that backed up ten minutes ago does not scan fifteen hours of log.
+  local win=$(( age_h + 1 ))
+  local blob=$(/usr/bin/log show --last ${win}h --info \
+      --predicate 'subsystem == "com.apple.TimeMachine" AND category == "CopyProgress"' \
+      --style compact 2>/dev/null)
+
+  # Last block wins. A backup copies each volume separately, and an interrupted
+  # pass leaves its own summary behind above the one that finished.
+  local added total elapsed
+  added=$(print -r -- "$blob"   | grep -E 'Total Items Added'     | tail -1 | sed -nE 's/.*p: ([0-9.]+ [A-Za-z]+|Zero KB)\).*/\1/p')
+  total=$(print -r -- "$blob"   | grep -E 'Total Items in Backup' | tail -1 | sed -nE 's/.*p: ([0-9.]+ [A-Za-z]+|Zero KB)\).*/\1/p')
+  elapsed=$(print -r -- "$blob" | grep -E '^Time elapsed:'        | tail -1 | sed -nE 's/^Time elapsed: (.*)$/\1/p')
+  added=$(sc_tm_norm_size "$added"); total=$(sc_tm_norm_size "$total")
+  [[ -n $elapsed ]] && elapsed=$(sc_tm_elapsed_short "$elapsed")
+
+  printf '%s\t%s\t%s\t%s\n' "$e" "$added" "$total" "$elapsed" > $SC_TM_LAST_CACHE
+}
+
+# True when the cache does not describe the backup that is currently the latest.
+sc_tm_last_stats_stale() {
+  local e; e=$(sc_tm_last_backup_epoch) || return 1
+  [[ -r $SC_TM_LAST_CACHE ]] || return 0
+  local cached; IFS=$'\t' read -r cached _ < $SC_TM_LAST_CACHE
+  [[ $cached != $e ]]
+}
+
+# Headline form: "1.5 GB in 11m". Deliberately drops the backup total -- the
+# headline answers "what did it move", the detail below answers "into what".
+sc_tm_last_short() {
+  local stats added total elapsed
+  stats=$(sc_tm_last_stats) || return 1
+  IFS=$'\t' read -r added total elapsed <<< "$stats"
+  [[ -n $added ]] || return 1
+  print -rn -- "${added}${elapsed:+ in ${elapsed}}"
+}
+
+# The sentence the checks append when the numbers are available. Empty string
+# when they are not, so callers can interpolate it unconditionally.
+#
+# Added against total is also the full-vs-incremental answer, and a more honest
+# one than the log's own "strategy:" line: 1.5 GB written into a 172.6 GB backup
+# is self-evidently incremental, and needs no assumption about what an
+# undocumented string means. A first backup writes essentially the whole thing,
+# so the two numbers converge and the ratio says so without being told.
+sc_tm_last_clause() {
+  local stats added total elapsed
+  stats=$(sc_tm_last_stats) || return 0
+  IFS=$'\t' read -r added total elapsed <<< "$stats"
+  [[ -n $added && -n $total ]] || return 0
+  print -rn -- " Wrote ${added} into a ${total} backup${elapsed:+ in ${elapsed}}."
+}
+
+# Cheap. Prints "<added>\t<total>\t<elapsed>" for the current last backup, or
+# nothing at all -- an empty read is the normal state on a machine whose last
+# backup predates the log, and callers simply omit the clause.
+sc_tm_last_stats() {
+  local e; e=$(sc_tm_last_backup_epoch) || return 1
+  [[ -r $SC_TM_LAST_CACHE ]] || return 1
+  local cached added total elapsed
+  IFS=$'\t' read -r cached added total elapsed < $SC_TM_LAST_CACHE
+  [[ $cached == $e && -n $added ]] || return 1
+  printf '%s\t%s\t%s\n' "$added" "$total" "$elapsed"
+}
+
 # ---- did the last attempt actually SUCCEED? --------------------------------
 # Age cannot see this, and that is the gap that lets a backup die quietly. The
 # date above comes from SnapshotDates, which records completions only -- so a
@@ -477,21 +622,32 @@ sc_run_health_checks() {
   SC_CHECKS=(); SC_NOTES=(); SC_TM_AWAY=0
 
   # -- disk --------------------------------------------------------------
+  # The percentage answers "is this a problem"; the absolute figure answers "how
+  # much room do I have", and people want both -- so both go in the headline,
+  # which is the one string every surface shows: the Verdict row, the menu bar
+  # dropdown and the notification title. The detail is then free to say only
+  # what it is for, which is what happens next. It used to restate the same two
+  # numbers, and once the headline carried them the menu bar printed them twice
+  # on adjacent rows.
   local free=$(sc_free_bytes) pct=$(sc_pct_free)
+  local disk_h="${pct}% free ($(sc_human $free))"
   if   (( pct < SC_CRIT_PCT )); then
-    sc_check CRIT Disk "${pct}% free" \
-      "Only $(sc_human $free) free (${pct}%). Swap cannot grow — expect freezes and app kills."
+    sc_check CRIT Disk "$disk_h" "Swap cannot grow — expect freezes and app kills."
   elif (( pct < SC_WARN_PCT )); then
-    sc_check WARN Disk "${pct}% free" "$(sc_human $free) free (${pct}%). Reclaim before it bites."
+    sc_check WARN Disk "$disk_h" "Reclaim before it bites."
   else
-    sc_check OK   Disk "${pct}% free" "$(sc_human $free) free (${pct}%)."
+    sc_check OK   Disk "$disk_h"
   fi
 
   # -- backups on at all -------------------------------------------------
   local tm_on=0
   if sc_tm_enabled; then
     tm_on=1
-    sc_check OK Backups "enabled"
+    # The cadence rides here because "enabled" alone never answers the question
+    # people actually have, which is how often. It is the configured policy, not
+    # a promise about when the next one fires -- see sc_tm_interval_human.
+    local iv=$(sc_tm_interval_human) && [[ -n $iv ]] || iv=""
+    sc_check OK Backups "enabled${iv:+ · $iv}"
   else
     sc_check CRIT Backups "off" "Time Machine automatic backups are switched off — nothing is being backed up."
   fi
@@ -504,7 +660,11 @@ sc_run_health_checks() {
     elif (( d >= SC_TM_WARN_D )); then
       sc_check WARN Backup "${d} days" "Last completed backup was ${d} days ago."
     else
-      sc_check OK Backup "${d}d ago" "Last completed backup $(sc_tm_last_backup_human)."
+      # Only the healthy row gets the size. A stale chain has a more urgent
+      # thing to say, and past SC_TM_LOG_MAX_H the figure is gone anyway.
+      local short=$(sc_tm_last_short)
+      sc_check OK Backup "${d}d ago${short:+ · $short}" \
+        "Last completed backup $(sc_tm_last_backup_human).$(sc_tm_last_clause)"
     fi
   else
     sc_check WARN Backup "age unknown" "Could not read the last backup date from Time Machine preferences, so this is unverified rather than healthy."

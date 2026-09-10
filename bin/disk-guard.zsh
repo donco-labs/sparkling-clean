@@ -40,6 +40,15 @@ if sc_sizes_stale; then
   ( nice -n 15 zsh -c "source ${0:A:h}/lib/common.zsh; sc_sizes_refresh" >/dev/null 2>&1 & ) &!
 fi
 
+# Same bargain for the last backup's size: `log show --info` runs about a
+# second, so it happens here rather than in the ten-minute menu bar render.
+# Keyed to the backup itself, so this fires once per completed backup and then
+# never again for it. The clause appears on the NEXT run, like the watchlist --
+# a check that blocked on its own cache warming would be the wrong trade.
+if sc_tm_last_stats_stale; then
+  ( nice -n 15 zsh -c "source ${0:A:h}/lib/common.zsh; sc_tm_last_stats_refresh" >/dev/null 2>&1 & ) &!
+fi
+
 local level=$(sc_overall_level) rc=0
 case $level in (CRIT) rc=2 ;; (WARN) rc=1 ;; esac
 

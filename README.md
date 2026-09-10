@@ -173,6 +173,7 @@ A launchd LaunchAgent labelled `com.sparklingclean.diskguard`. Checks every
 | Health log | `~/.local/state/sparkling-clean/sparkling-clean.log` |
 | Notification state | `~/.local/state/sparkling-clean/guard.state` |
 | Backup-failure clock | `~/.local/state/sparkling-clean/tm.state` |
+| Last-backup size cache | `~/.local/state/sparkling-clean/tm-last.tsv` |
 | launchd stdout / stderr | `.guard.out.log` / `.guard.err.log` (gitignored) |
 
 The template carries a `__SC_ROOT__` placeholder that `make install-guard`
@@ -229,15 +230,45 @@ stale`, not `Disk CRIT` on a machine with 121 GB free.
 
 ```
 == Verdict ==
-  OK    Disk       22% free
-  OK    Backups    enabled
-  OK    Backup     0d ago
+  OK    Disk       22% free (109.2 GB)
+  OK    Backups    enabled · hourly
+  OK    Backup     0d ago · 1.5 GB in 11m
   OK    Attempts   last ok
   OK    Snapshots  2
   note  2 jetsam/panic report(s) in the last 3 days (past events, not a current fault)
 
 OK    healthy
 ```
+
+### What the backup rows do and do not claim
+
+`Backups: enabled · hourly` is the **configured cadence** (`AutoBackupInterval`),
+not a promise about when the next one runs. macOS hands the actual firing to its
+activity scheduler, which defers on power, thermal state, network and what you
+are doing. Measured gaps on one laptop against a 3600-second setting:
+
+```
+29  38  40  42  55  56  98  109  113  156  646   minutes
+```
+
+So there is deliberately no "next backup at 21:51" anywhere in this toolkit.
+Nothing exposes a next-fire time — not `tmutil`, not launchd, not `pmset` — and
+a predicted one would be wrong more often than right. Stating a time confidently
+and wrongly is the failure this whole project was written about.
+
+`Backup: 0d ago · 1.5 GB in 11m` is what the last completed backup actually
+wrote, read from backupd's own summary. The detail line adds the total it wrote
+into — `Wrote 1.5 GB into a 172.6 GB backup in 11m` — and that ratio is also the
+full-versus-incremental answer, without having to interpret any undocumented
+status string: a first backup writes essentially the whole thing, so the two
+numbers converge.
+
+It comes from `log show --info`, which costs about a second and whose store
+**retains roughly 15 hours** — a 3-day query returns byte-identical output to a
+12-hour one. So the guard reads it once per completed backup and caches it
+against that backup, and the clause is simply absent when the log no longer has
+it. That means it disappears exactly when the chain has been failing for days,
+which is fine: by then the Backup age row is the one talking.
 
 Thresholds, overridable by env: `SC_WARN_PCT` (15), `SC_CRIT_PCT` (10),
 `SC_TM_WARN_D` (2), `SC_TM_CRIT_D` (7), `SC_TM_FAIL_CRIT_H` (12),
