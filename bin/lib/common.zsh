@@ -205,6 +205,26 @@ sc_tm_last_backup_human() {
   date -r $e '+%Y-%m-%d %H:%M'
 }
 
+# Headline form of the same fact. "0d ago" collapsed five minutes and
+# twenty-three hours into one string, while the Attempts detail three lines
+# below printed the exact timestamp -- the same fact at two precisions, with
+# the coarse one in the more prominent place.
+#
+# A clock time is safe here because only the OK branch uses it, and that branch
+# exists only while the backup is younger than SC_TM_WARN_D. Two days is the
+# widest gap it ever has to describe, so a weekday is enough to disambiguate
+# and no date is needed. The WARN and CRIT rows keep counting in days, which is
+# what those rows are for.
+sc_tm_last_backup_short() {
+  local e; e=$(sc_tm_last_backup_epoch) || return 1
+  # %Y%j, not %j: two different years share a day-of-year.
+  if [[ $(date '+%Y%j') == $(date -r $e '+%Y%j') ]]; then
+    date -r $e '+%H:%M'
+  else
+    date -r $e '+%a %H:%M'
+  fi
+}
+
 # ---- how often is it MEANT to run? -----------------------------------------
 # AutoBackupInterval is the configured cadence and is readable unprivileged.
 # It is a target, not a schedule: macOS hands the actual firing to its activity
@@ -685,7 +705,8 @@ sc_run_health_checks() {
       # Only the healthy row gets the size. A stale chain has a more urgent
       # thing to say, and past SC_TM_LOG_MAX_H the figure is gone anyway.
       local short=$(sc_tm_last_short)
-      sc_check OK Backup "${d}d ago${short:+ · $short}" \
+      local when; when=$(sc_tm_last_backup_short) || when="${d}d ago"
+      sc_check OK Backup "${when}${short:+ · $short}" \
         "Last completed backup $(sc_tm_last_backup_human).$(sc_tm_last_clause)"
     fi
   else

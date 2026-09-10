@@ -232,7 +232,7 @@ stale`, not `Disk CRIT` on a machine with 121 GB free.
 == Verdict ==
   OK    Disk       22% free (109.2 GB)
   OK    Backups    enabled · hourly
-  OK    Backup     0d ago · 1.5 GB in 11m
+  OK    Backup     Wed 21:10 · 1.5 GB in 11m
   OK    Attempts   last ok
   OK    Snapshots  2
   note  2 jetsam/panic report(s) in the last 3 days (past events, not a current fault)
@@ -256,8 +256,14 @@ Nothing exposes a next-fire time — not `tmutil`, not launchd, not `pmset` — 
 a predicted one would be wrong more often than right. Stating a time confidently
 and wrongly is the failure this whole project was written about.
 
-`Backup: 0d ago · 1.5 GB in 11m` is what the last completed backup actually
-wrote, read from backupd's own summary. The detail line adds the total it wrote
+`Backup: Wed 21:10 · 1.5 GB in 11m` names the moment the last backup finished
+and what it wrote, read from backupd's own summary. The healthy row carries a
+clock time rather than an age because it only ever describes a backup younger
+than `SC_TM_WARN_D` — two days is the widest gap it has to express, so a weekday
+disambiguates and no date is needed, and today's backups drop the weekday
+entirely. `0d ago` said the same thing about a backup five minutes old and one
+twenty-three hours old. The WARN and CRIT rows still count in days, which is
+what those rows are for. The detail line adds the total it wrote
 into — `Wrote 1.5 GB into a 172.6 GB backup in 11m` — and that ratio is also the
 full-versus-incremental answer, without having to interpret any undocumented
 status string: a first backup writes essentially the whole thing, so the two
@@ -276,9 +282,9 @@ Thresholds, overridable by env: `SC_WARN_PCT` (15), `SC_CRIT_PCT` (10),
 
 **Backup age and backup outcome are separate checks, and they have to be.** Age
 is read from `SnapshotDates`, which only ever records completions — so a Mac
-attempting hourly and failing every single time still reports `0d ago`, and goes
-on reporting it until the number finally drifts past `SC_TM_WARN_D` two days
-later. `Attempts` reads `RESULT` instead, the outcome of the most recent attempt,
+attempting hourly and failing every single time still reports a healthy-looking
+recent timestamp, and goes on reporting it until the age finally drifts past
+`SC_TM_WARN_D` two days later. `Attempts` reads `RESULT` instead, the outcome of the most recent attempt,
 and names the cause: `Attempts CRIT: failing 33h — the destination went away
 mid-copy (network dropped)`. It warns on the first failing check and escalates
 after `SC_TM_FAIL_CRIT_H` hours, so a chain that stops working is caught on the
