@@ -65,8 +65,40 @@ guard-status: ## Is the guard loaded?
 log: ## Tail the guard log
 	@tail -30 $(HOME)/.local/state/sparkling-clean/sparkling-clean.log 2>/dev/null || echo "no log yet"
 
+# ---- menu bar plugin: develop against the checkout, then put it back -------
+# The plugin SwiftBar loads is a symlink, and which copy it points at decides
+# whether you are testing your edits or the last release. Switching it by hand
+# means retyping a path with a space in it, which is how you end up debugging
+# the wrong file for ten minutes.
+PLUGIN_DIR  := $(HOME)/Library/Application Support/SwiftBarPlugins
+PLUGIN_NAME := sparkling-clean.10m.sh
+PLUGIN_LINK := $(PLUGIN_DIR)/$(PLUGIN_NAME)
+BREW_PLUGIN  = $(shell brew --prefix 2>/dev/null)/opt/sparkling-clean/libexec/extra/swiftbar/$(PLUGIN_NAME)
+
+plugin-dev: ## Point SwiftBar at THIS checkout (live edits)
+	@mkdir -p "$(PLUGIN_DIR)"
+	@ln -sf "$(ROOT)/extra/swiftbar/$(PLUGIN_NAME)" "$(PLUGIN_LINK)"
+	@open -g "swiftbar://refreshallplugins" 2>/dev/null || true
+	@echo "menu bar -> checkout ($(ROOT))"
+	@echo "put it back with: make plugin-brew"
+
+plugin-brew: ## Point SwiftBar back at the Homebrew copy (the release)
+	@test -r "$(BREW_PLUGIN)" || { echo "not installed via brew: $(BREW_PLUGIN)"; exit 1; }
+	@mkdir -p "$(PLUGIN_DIR)"
+	@ln -sf "$(BREW_PLUGIN)" "$(PLUGIN_LINK)"
+	@open -g "swiftbar://refreshallplugins" 2>/dev/null || true
+	@echo "menu bar -> homebrew ($$(/opt/homebrew/bin/sparkling-clean version 2>/dev/null || echo installed))"
+
+plugin-status: ## Which copy is the menu bar running?
+	@if [ ! -L "$(PLUGIN_LINK)" ]; then echo "no plugin symlink (make plugin-dev or make plugin-brew)"; \
+	elif readlink "$(PLUGIN_LINK)" | grep -q "^$(ROOT)/"; then echo "checkout   $$(readlink "$(PLUGIN_LINK)")"; \
+	else echo "homebrew   $$(readlink "$(PLUGIN_LINK)")"; fi
+
+plugin-refresh: ## Redraw the menu bar now, without waiting for the 10m tick
+	@open -g "swiftbar://refreshplugin?name=sparkling-clean" 2>/dev/null || true
+
 lint: ## Syntax-check every script
 	@for f in bin/*.zsh bin/lib/*.zsh; do zsh -n $$f && echo "  ok  $$f"; done
 	@plutil -lint $(PLIST_SRC)
 
-.PHONY: help report brief check dry clean-safe clean-more review docker docker-clean tm-status tm-exclude tm-exclude-apply install-guard uninstall-guard guard-status log lint
+.PHONY: help report brief check dry clean-safe clean-more review docker docker-clean tm-status tm-exclude tm-exclude-apply install-guard uninstall-guard guard-status log lint plugin-dev plugin-brew plugin-status plugin-refresh

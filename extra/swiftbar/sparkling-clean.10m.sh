@@ -114,12 +114,28 @@ print -r -- "$json" \
       local n=$(print -r -- "$row" | sed -E 's/.*"name":"([^"]*)".*/\1/')
       local h=$(print -r -- "$row" | sed -E 's/.*"headline":"([^"]*)".*/\1/')
       local d=$(print -r -- "$row" | sed -E 's/.*"detail":"([^"]*)".*/\1/')
+      # The full sentence rides along as a tooltip. It costs no row and no
+      # width, and it is the only way an OK row's detail is reachable at all --
+      # visible detail rows are printed for problems only, so on a healthy
+      # machine every detail string was going into the JSON and reaching no
+      # one. Hovering now answers "why is this OK" as well as "why is this not".
+      #
+      # A literal " would end the quoted parameter early and a literal | would
+      # start a second parameter list, so both are neutralised first.
+      local tip=${d//\"/}
+      tip=${tip//|/\u2502}
+
+      # Built up rather than interpolated per branch, so a row with nothing to
+      # add prints no trailing "|" at all. A bare pipe is a parameter list with
+      # no parameters in it, which is not something to hand a parser on purpose.
+      local params="" icon="✓"
       case $l in
-        (CRIT) print -r -- "✗ ${n}: ${h} | color=red"    ;;
-        (WARN) print -r -- "△ ${n}: ${h} | color=orange" ;;
-        (*)    print -r -- "✓ ${n}: ${h}"                ;;
+        (CRIT) icon="✗"; params="color=red"    ;;
+        (WARN) icon="△"; params="color=orange" ;;
       esac
-      # Explanation goes here, where there is room for it — never in the title.
+      [[ -n $tip && $tip != "$h" ]] && params="${params:+$params }tooltip=\"${tip}\""
+      print -r -- "${icon} ${n}: ${h}${params:+ | $params}"
+      # Problems also get it in the open, where it cannot be missed.
       [[ $l != OK && -n $d && $d != "$h" ]] && sc_menu_wrapped "$d" "   " "size=11 color=gray"
     done
 

@@ -157,6 +157,10 @@ lines of config instead of a signing pipeline.
 | `make uninstall-guard` | Unload + remove it |
 | `make guard-status` | Is the guard loaded? |
 | `make log` | Tail the guard's health log |
+| `make plugin-dev` | Point the menu bar at this checkout, for live edits |
+| `make plugin-brew` | Point it back at the Homebrew copy |
+| `make plugin-status` | Which copy is the menu bar running? |
+| `make plugin-refresh` | Redraw the menu bar now |
 | `make lint` | Syntax-check every script and the plist |
 
 ## The guard

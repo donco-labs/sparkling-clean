@@ -687,7 +687,7 @@ sc_run_health_checks() {
   elif (( pct < SC_WARN_PCT )); then
     sc_check WARN Disk "$disk_h" "Reclaim before it bites."
   else
-    sc_check OK   Disk "$disk_h"
+    sc_check OK   Disk "$disk_h" "$(sc_human $free) free of $(sc_human $(sc_total_bytes)). Warns below ${SC_WARN_PCT}%, critical below ${SC_CRIT_PCT}%."
   fi
 
   # -- backups on at all -------------------------------------------------
@@ -698,7 +698,7 @@ sc_run_health_checks() {
     # people actually have, which is how often. It is the configured policy, not
     # a promise about when the next one fires -- see sc_tm_interval_human.
     local iv=$(sc_tm_interval_human) && [[ -n $iv ]] || iv=""
-    sc_check OK Backups "enabled${iv:+ · $iv}"
+    sc_check OK Backups "enabled${iv:+ · $iv}" "Automatic backups are on${iv:+, running $iv}. That is the configured cadence, not a promise about when the next one fires."
   else
     sc_check CRIT Backups "off" "Automatic backups are off — nothing is being backed up."
   fi
@@ -786,7 +786,7 @@ sc_run_health_checks() {
     sc_check WARN Snapshots "${n}" \
       "${n} snapshots hold space from deleted files. Deleting more frees nothing until they are thinned."
   else
-    sc_check OK Snapshots "${n}"
+    sc_check OK Snapshots "${n}" "${n} local snapshot(s). They hold space from deleted files; this warns at 5."
   fi
 
   # -- historical context, never escalates -------------------------------
