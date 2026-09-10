@@ -200,11 +200,8 @@ if [[ -n $sizes ]]; then
   print -r -- "--Caches and images regrow; watch the shape, not the total. | color=gray"
 fi
 print -r -- "---"
-# Version comes from the Homebrew Cellar path the symlink resolves to, so it is
-# always the version actually running rather than one baked in at build time.
-local ver=$(print -r -- "$SC" | sed -nE 's|.*/Cellar/sparkling-clean/([^/]+)/.*|\1|p')
 print -r -- "About sparkling-clean"
-print -r -- "--Version ${ver:-dev} | color=gray"
+print -r -- "--Version $(sc_version "$SC") | color=gray"
 print -r -- "--Warn below ${SC_WARN_PCT}% free · critical below ${SC_CRIT_PCT}% | color=gray"
 print -r -- "--Backup stale after ${SC_TM_WARN_D}d · critical after ${SC_TM_CRIT_D}d | color=gray"
 print -r -- "--Failing attempts critical after ${SC_TM_FAIL_CRIT_H}h | color=gray"

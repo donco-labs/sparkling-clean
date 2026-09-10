@@ -45,15 +45,11 @@ local cmd=${1:-}
 case $cmd in
   ""|-h|--help|help) usage ;;
   version|-v|--version)
-    # Derived from the Cellar path the symlink resolves to, the same way the
-    # SwiftBar About submenu does it, so it reports the version actually
-    # running rather than one baked in at build time. Nothing sets
-    # SPARKLING_CLEAN_VERSION in the formula, so this printed "dev" on every
-    # Homebrew install. A checkout has no Cellar path and correctly stays dev.
-    local ver=${SPARKLING_CLEAN_VERSION:-}
-    [[ -n $ver ]] || \
-      ver=$(print -r -- "${0:A}" | sed -nE 's|.*/Cellar/sparkling-clean/([^/]+)/.*|\1|p')
-    print -r -- "sparkling-clean ${ver:-dev}" ;;
+    # sc_version owns the three-source resolution; this and the SwiftBar About
+    # submenu used to carry their own copy of the sed, which is how they could
+    # have disagreed.
+    source $here/lib/common.zsh 2>/dev/null
+    print -r -- "sparkling-clean $(sc_version ${0:A})" ;;
   thin)
     # Space that deletions did not return is usually held by local snapshots.
     # This is the one operation people most often need and least often know

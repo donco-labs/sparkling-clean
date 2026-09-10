@@ -177,6 +177,28 @@ sc_tm_days_since_backup() {
   print -r -- $(( ( $(date +%s) - e ) / 86400 ))
 }
 
+# ---- which build is this? ---------------------------------------------------
+# Three sources, in order of authority:
+#
+#   1. SPARKLING_CLEAN_VERSION, if something set it.
+#   2. The Homebrew Cellar path the entry point resolves through. This is the
+#      version actually running rather than one baked in at build time, which
+#      is what the formula installs.
+#   3. `git describe` in a checkout. A checkout used to report a bare "dev",
+#      which is true but useless the moment you point a live menu bar at your
+#      working tree: "v0.4.4-1-gbe9cd7b-dirty" says which commit AND that there
+#      are uncommitted edits, and the second half is the part you want when the
+#      dropdown is not showing what you just wrote.
+sc_version() {
+  [[ -n ${SPARKLING_CLEAN_VERSION:-} ]] && { print -r -- "$SPARKLING_CLEAN_VERSION"; return }
+  local self=${1:-${SC_ROOT:-${0:A:h}}} v
+  v=$(print -r -- "$self" | sed -nE 's|.*/Cellar/sparkling-clean/([^/]+)/.*|\1|p')
+  [[ -n $v ]] && { print -r -- "$v"; return }
+  v=$(git -C "${self:h}" describe --tags --always --dirty 2>/dev/null)
+  [[ -n $v ]] && { print -r -- "$v"; return }
+  print -r -- dev
+}
+
 sc_tm_last_backup_human() {
   local e
   e=$(sc_tm_last_backup_epoch) || { print -r -- "unknown"; return 1 }
