@@ -434,6 +434,13 @@ sc_pressure_events() {  # $1 = days, $2 = "any" | "memory"
 typeset -ga SC_CHECKS=()   # level \t name \t headline \t detail
 typeset -ga SC_NOTES=()
 
+# Set when the Attempts row is failing only because the destination is out of
+# reach. The row itself already says so, but a caller cannot tell that apart
+# from any other WARN by reading the record, and the guard needs to: an expected
+# weekday condition should not push a desktop notification. Matching on the
+# headline string from outside would work until someone rewords it.
+typeset -g SC_TM_AWAY=0
+
 sc_check() { SC_CHECKS+=("${1}"$'\t'"${2}"$'\t'"${3}"$'\t'"${4:-$3}") }
 
 # Accessors. The tab-separated record is an implementation detail; splitting it
@@ -467,7 +474,7 @@ sc_overall_level() {
 # Populates SC_CHECKS / SC_NOTES. Single source of truth: the report and the
 # guard must never disagree about whether this machine is healthy.
 sc_run_health_checks() {
-  SC_CHECKS=(); SC_NOTES=()
+  SC_CHECKS=(); SC_NOTES=(); SC_TM_AWAY=0
 
   # -- disk --------------------------------------------------------------
   local free=$(sc_free_bytes) pct=$(sc_pct_free)
@@ -538,6 +545,7 @@ sc_run_health_checks() {
           # Hold the clock, or coming home to one failed attempt would escalate
           # instantly on time that was only ever spent out of range.
           sc_tm_failing_reset $anchor
+          SC_TM_AWAY=1
           sc_check WARN Attempts "destination away" \
             "The destination is not reachable from this network, so nothing can be backed up (attempts report code ${res}). Expected while you are away; it should clear when you are back on its network. Last completed backup $(sc_tm_last_backup_human) — if you stay away, the Backup row above is what escalates."
         else

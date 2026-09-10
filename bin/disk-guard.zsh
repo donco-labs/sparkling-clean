@@ -78,17 +78,48 @@ local prev_level="" prev_notify_ts=0
 [[ -r $STATE ]] && IFS=$'\t' read -r prev_level prev_notify_ts < $STATE
 local now=$(date +%s)
 
+# A laptop that leaves the house every weekday cannot reach a NAS at home, and
+# the Attempts row correctly goes WARN saying so. Pushing a desktop notification
+# about it every morning trains you to dismiss the guard unread, which is how a
+# monitor stops working. Suppress the NOTIFICATION, never the row: the report,
+# the menu bar and the exit code still say WARN, because backups genuinely are
+# not happening.
+#
+# Only when it is the sole complaint. Away plus a filling disk is news, and
+# CRIT never qualifies -- if you stay away long enough the Backup age row
+# escalates, and that is the signal this whole suppression relies on existing.
+local away_only=0
+if [[ $level == WARN ]] && (( SC_TM_AWAY )); then
+  local -a bad
+  for c in $SC_CHECKS; do
+    [[ $(sc_check_level $c) == OK ]] && continue
+    bad+=("$(sc_check_name $c)")
+  done
+  (( ${#bad} == 1 )) && [[ $bad[1] == Attempts ]] && away_only=1
+fi
+
+# Change detection keys on this rather than the bare level, so a suppressed
+# away-WARN does not consume the transition a real WARN needs. Without it,
+# WARN(away) -> WARN(snapshots) reads as "no change" and stays silent for the
+# next twelve hours.
+local notify_key=$level
+(( away_only )) && notify_key=WARN-away
+
 local should_notify=0
 if   (( force ));                                                            then should_notify=1
-elif [[ $level != OK && $level != $prev_level ]];                            then should_notify=1
+elif [[ $level != OK && $notify_key != $prev_level ]];                       then should_notify=1
 elif [[ $level != OK ]] && (( now - prev_notify_ts > SC_RENOTIFY_H * 3600 )); then should_notify=1
 fi
+
+# --force still speaks: it means "tell me regardless of the de-dup window", and
+# that includes this one.
+(( away_only && ! force )) && should_notify=0
 
 # A suppressed notification must not advance the notify clock, so a later
 # non-quiet run still delivers it.
 local notify_ts=$prev_notify_ts
 (( should_notify && ! quiet )) && notify_ts=$now
-printf '%s\t%s\n' $level $notify_ts > $STATE
+printf '%s\t%s\n' $notify_key $notify_ts > $STATE
 
 # ---- machine-readable ------------------------------------------------------
 # Consumed by the SwiftBar plugin and by CI. Hand-rolled rather than pulling in

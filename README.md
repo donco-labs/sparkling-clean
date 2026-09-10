@@ -201,6 +201,16 @@ It **checks** every 2 hours; it **notifies** only on a level change, or once per
 **A silent notification tray is the healthy steady state** — use `make log` to
 confirm it is alive.
 
+One condition is deliberately silent even at WARN: `Attempts: destination away`
+when it is the *only* thing wrong. A laptop that leaves the house every weekday
+cannot reach a NAS at home, and a notification every morning about the expected
+consequence of commuting trains you to dismiss the guard unread. The row still
+reads WARN in the report and the menu bar and the exit code is still `1` —
+backups genuinely are not happening — but nothing is pushed. Add a second
+complaint and it speaks again: away *and* a filling disk is news. So is any
+CRIT, which is what the Backup age row escalates to if you stay away past
+`SC_TM_CRIT_D`. `--force` ignores the suppression.
+
 Signals come in two tiers:
 
 | Tier | Contents | Escalates | Notifies |
