@@ -332,14 +332,20 @@ sc_tm_last_stats_stale() {
   [[ $cached != $e ]]
 }
 
-# Headline form: "1.5 GB in 11m". Deliberately drops the backup total -- the
-# headline answers "what did it move", the detail below answers "into what".
+# Headline form: "3.3 GB of 172.6 GB in 17m".
+#
+# The total was originally left to the detail line, which was a mistake: only
+# non-OK rows render their detail, so on a healthy machine -- the normal case --
+# the backup total was written into the JSON and displayed nowhere. The ratio is
+# the whole point of showing the total, since it is what makes a backup legible
+# as incremental rather than full, so it belongs where it is actually seen. It
+# costs twelve characters on one row and no extra row at all.
 sc_tm_last_short() {
   local stats added total elapsed
   stats=$(sc_tm_last_stats) || return 1
   IFS=$'\t' read -r added total elapsed <<< "$stats"
   [[ -n $added ]] || return 1
-  print -rn -- "${added}${elapsed:+ in ${elapsed}}"
+  print -rn -- "${added}${total:+ of ${total}}${elapsed:+ in ${elapsed}}"
 }
 
 # The sentence the checks append when the numbers are available. Empty string
@@ -357,6 +363,9 @@ sc_tm_last_clause() {
   [[ -n $added && -n $total ]] || return 0
   print -rn -- " Wrote ${added} into a ${total} backup${elapsed:+ in ${elapsed}}."
 }
+# NOTE: only non-OK rows render their detail, so this clause reaches a reader
+# only on the unhealthy path. The healthy case is carried by sc_tm_last_short
+# in the headline.
 
 # Cheap. Prints "<added>\t<total>\t<elapsed>" for the current last backup, or
 # nothing at all -- an empty read is the normal state on a machine whose last
@@ -401,9 +410,9 @@ sc_tm_last_result() {
 # you to the wrong subsystem, which is worse than an honest "look it up".
 sc_tm_result_cause() {
   case ${1:-} in
-    (26) print -r -- "the destination went away mid-copy (network dropped)" ;;
-    (70) print -r -- "the backup disk image detached mid-copy" ;;
-    (*)  print -r -- "backupd reported error ${1:-?}" ;;
+    (26) print -r -- "network dropped mid-copy" ;;
+    (70) print -r -- "disk image detached mid-copy" ;;
+    (*)  print -r -- "backupd error ${1:-?}" ;;
   esac
 }
 
@@ -691,16 +700,16 @@ sc_run_health_checks() {
     local iv=$(sc_tm_interval_human) && [[ -n $iv ]] || iv=""
     sc_check OK Backups "enabled${iv:+ · $iv}"
   else
-    sc_check CRIT Backups "off" "Time Machine automatic backups are switched off — nothing is being backed up."
+    sc_check CRIT Backups "off" "Automatic backups are off — nothing is being backed up."
   fi
 
   # -- backup chain actually completing ----------------------------------
   local d
   if d=$(sc_tm_days_since_backup); then
     if   (( d >= SC_TM_CRIT_D )); then
-      sc_check CRIT Backup "${d} days" "No completed backup in ${d} days. The last one finished $(sc_tm_last_backup_human)."
+      sc_check CRIT Backup "${d} days" "Nothing has completed since $(sc_tm_last_backup_human)."
     elif (( d >= SC_TM_WARN_D )); then
-      sc_check WARN Backup "${d} days" "Last completed backup was ${d} days ago."
+      sc_check WARN Backup "${d} days" "Last one finished $(sc_tm_last_backup_human)."
     else
       # Only the healthy row gets the size. A stale chain has a more urgent
       # thing to say, and past SC_TM_LOG_MAX_H the figure is gone anyway.
@@ -710,7 +719,7 @@ sc_run_health_checks() {
         "Last completed backup $(sc_tm_last_backup_human).$(sc_tm_last_clause)"
     fi
   else
-    sc_check WARN Backup "age unknown" "Could not read the last backup date from Time Machine preferences, so this is unverified rather than healthy."
+    sc_check WARN Backup "age unknown" "Could not read the last backup date — unverified, not healthy."
   fi
 
   # -- are those attempts succeeding -------------------------------------
@@ -750,22 +759,22 @@ sc_run_health_checks() {
           sc_tm_failing_reset $anchor
           SC_TM_AWAY=1
           sc_check WARN Attempts "destination away" \
-            "The destination is not reachable from this network, so nothing can be backed up (attempts report code ${res}). Expected while you are away; it should clear when you are back on its network. Last completed backup $(sc_tm_last_backup_human) — if you stay away, the Backup row above is what escalates."
+            "Destination unreachable from this network (code ${res}). Expected while away; clears on its network."
         else
           since=$(sc_tm_failing_since $anchor)
           hours=$(( ( $(date +%s) - since ) / 3600 ))
           if (( hours >= SC_TM_FAIL_CRIT_H )); then
             sc_check CRIT Attempts "failing ${hours}h" \
-              "Every backup attempt has failed for ${hours}h — ${cause} (code ${res}). The destination is reachable, so this is not distance: backups are starting on schedule and none are landing. The last one that completed was $(sc_tm_last_backup_human)."
+              "Failing ${hours}h — ${cause} (code ${res}). Destination is reachable, so not distance."
           else
             sc_check WARN Attempts "failing" \
-              "The most recent backup attempt failed — ${cause} (code ${res}). The last completed backup was $(sc_tm_last_backup_human), so the age above is still plausible; it will stay that way while the chain rots."
+              "Last attempt failed — ${cause} (code ${res}). The age above only moves on success."
           fi
         fi
       fi
     else
       sc_check WARN Attempts "unknown" \
-        "Could not read the outcome of the last backup attempt from Time Machine preferences, so this is unverified rather than healthy."
+        "Could not read the last attempt's outcome — unverified, not healthy."
     fi
   fi
 
@@ -775,7 +784,7 @@ sc_run_health_checks() {
   local n=$(sc_snapshot_count)
   if (( n >= 5 )); then
     sc_check WARN Snapshots "${n}" \
-      "${n} local snapshots are still holding space from files you deleted. Until they are thinned, deleting more will not free anything."
+      "${n} snapshots hold space from deleted files. Deleting more frees nothing until they are thinned."
   else
     sc_check OK Snapshots "${n}"
   fi
@@ -783,11 +792,11 @@ sc_run_health_checks() {
   # -- historical context, never escalates -------------------------------
   local n_mem=$(sc_pressure_events 3 memory) n_any=$(sc_pressure_events 3 any)
   if (( n_mem > 0 )); then
-    sc_note "${n_mem} memory-exhaustion event(s) in the last 3 days (past events; if it recurs, look at RAM not disk)"
+    sc_note "${n_mem} memory-exhaustion event(s) in 3 days — if it recurs, look at RAM not disk"
   elif (( SC_PRESSURE_UNKNOWN > 0 )); then
-    sc_note "${SC_PRESSURE_UNKNOWN} jetsam event(s) in the last 3 days whose reason could not be read"
+    sc_note "${SC_PRESSURE_UNKNOWN} jetsam event(s) in 3 days, reason unreadable"
   elif (( n_any > 0 )); then
-    sc_note "${n_any} kernel report(s) in the last 3 days — none from memory exhaustion (routine per-process limits)"
+    sc_note "${n_any} kernel report(s) in 3 days — none from memory exhaustion"
   fi
 }
 
