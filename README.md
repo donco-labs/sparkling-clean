@@ -124,7 +124,14 @@ it follows the menu bar appearance like any native item. Severity is weight rath
 than a different symbol: `internaldrive` when healthy, filled on a warning, and
 only a genuine emergency changes the glyph to a caution triangle and earns any
 text. The drive stays recognisable in a crowded menu bar either way. The
-dropdown identifies itself, explains each non-OK check, and offers the fix: when
+dropdown gives one row per check and puts the explanation in a **tooltip** —
+hover any row, healthy or not, to read what it is measuring and against what.
+That keeps the menu to one line per check instead of spending up to five rows
+on a sentence, and it costs nothing to explain the OK rows too. Nothing is
+hidden by it: a condition worth acting on is *pushed* as a notification built
+from the same text, so the dropdown is the passive surface rather than the only
+one. Actions still get rows of their own, because a fix nobody can find is not
+a fix: when
 snapshots are holding space, it hands you `sparkling-clean thin` rather than
 describing the problem and leaving you to search for the remedy. Reads the guard's `--json` (0.4 s) rather than the full report (tens of
 seconds), so it is cheap to refresh.
@@ -266,9 +273,9 @@ own summary. That ratio is also the full-versus-incremental answer, without
 having to interpret any undocumented status string: a first backup writes
 essentially the whole thing, so the two numbers converge.
 
-All of it sits in the headline rather than the detail, because **only non-OK
-rows render their detail** — anything put there is invisible on a healthy
-machine, which is the normal case. The row carries a clock time rather than an
+All of it sits in the headline because the headline is the row: explanations
+live in tooltips now, so anything not in the headline waits to be hovered. The
+row carries a clock time rather than an
 age because it only ever describes a backup younger than `SC_TM_WARN_D`; two
 days is the widest gap it has to express, so a weekday disambiguates and no
 date is needed, and today's backups drop the weekday entirely. `0d ago` said

@@ -759,7 +759,7 @@ sc_run_health_checks() {
           sc_tm_failing_reset $anchor
           SC_TM_AWAY=1
           sc_check WARN Attempts "destination away" \
-            "Destination unreachable from this network (code ${res}). Expected while away; clears on its network."
+            "Destination unreachable from this network (code ${res}). Expected while away; clears on its network. If you stay away, the Backup row is what escalates."
         else
           since=$(sc_tm_failing_since $anchor)
           hours=$(( ( $(date +%s) - since ) / 3600 ))

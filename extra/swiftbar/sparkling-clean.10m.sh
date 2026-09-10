@@ -87,10 +87,13 @@ print -r -- "---"
 print -r -- "sparkling-clean · disk and backup health | size=11 color=gray href=https://github.com/donco-labs/sparkling-clean"
 print -r -- "---"
 
-# SwiftBar sizes the dropdown to its longest row, and check details are full
-# sentences: one measured 235 characters and stretched the menu across most of
-# the screen. Wrap rather than truncate -- the detail is the part that says what
-# to do about the problem, so losing its tail is worse than using three rows.
+# SwiftBar sizes the dropdown to its longest row, and a note is a full sentence.
+# Wrap rather than truncate: losing the tail of a sentence is worse than using
+# two rows for it.
+#
+# Check details used to come through here too, until they moved into tooltips.
+# Notes have no row of their own to hang a tooltip on -- they ARE the row -- so
+# this is what they still use.
 #
 # A literal "|" would be read as the start of SwiftBar's parameter list and
 # silently eat the rest of the row, so it is replaced before emitting.
@@ -135,8 +138,21 @@ print -r -- "$json" \
       esac
       [[ -n $tip && $tip != "$h" ]] && params="${params:+$params }tooltip=\"${tip}\""
       print -r -- "${icon} ${n}: ${h}${params:+ | $params}"
-      # Problems also get it in the open, where it cannot be missed.
-      [[ $l != OK && -n $d && $d != "$h" ]] && sc_menu_wrapped "$d" "   " "size=11 color=gray"
+
+      # The explanation lives in the tooltip and nowhere else. Printing it in
+      # the open as well put the same sentence on screen twice -- once under
+      # the row, once floating beside it -- and cost up to five rows to do it.
+      #
+      # It is not hiding anything. A condition that needs acting on is PUSHED:
+      # the guard's notification body is built from these same detail strings,
+      # so a problem announces itself rather than waiting to be hovered. The
+      # dropdown is the passive surface, and the one condition deliberately not
+      # pushed -- "destination away" -- is also the one whose headline already
+      # says the whole thing.
+      #
+      # The exception is an ACTION, which is not an explanation: the thin offer
+      # for snapshots below still gets a row of its own, because a fix nobody
+      # can find is not a fix.
     done
 
 # A point-in-time check tells you where you are; the trend tells you where you
