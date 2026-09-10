@@ -131,10 +131,29 @@ print -r -- "$json" \
       # Built up rather than interpolated per branch, so a row with nothing to
       # add prints no trailing "|" at all. A bare pipe is a parameter list with
       # no parameters in it, which is not something to hand a parser on purpose.
+      # Every row gets a colour, including the healthy ones, and that is not
+      # only about colour. SwiftBar hands an item a target/action when it has
+      # an action OR a colour:
+      #
+      #     if params.hasAction || params.color != nil { item.target = self ... }
+      #
+      # A tooltip does not qualify. So an uncoloured row got no target, AppKit
+      # auto-disabled it, and it rendered grey and refused to highlight -- the
+      # system's universal "this does nothing". That was exactly backwards for
+      # the OK rows: since the visible detail lines went away, hovering is the
+      # ONLY way to read them, and they were the ones styled as inert.
+      #
+      # dimgray/lightgray keeps them recessive against the orange and red, so
+      # the severity hierarchy survives; what changes is that they now highlight
+      # under the pointer, which is the affordance that says "there is something
+      # here". A light,dark pair because SwiftBar's colours are literal RGB --
+      # webColor() takes CSS names and hex only, and drops alpha, so there is no
+      # semantic labelColor to ask for and a single value would fight one theme.
       local params="" icon="✓"
       case $l in
-        (CRIT) icon="✗"; params="color=red"    ;;
-        (WARN) icon="△"; params="color=orange" ;;
+        (CRIT) icon="✗"; params="color=red"                ;;
+        (WARN) icon="△"; params="color=orange"             ;;
+        (*)             params="color=dimgray,lightgray"   ;;
       esac
       [[ -n $tip && $tip != "$h" ]] && params="${params:+$params }tooltip=\"${tip}\""
       print -r -- "${icon} ${n}: ${h}${params:+ | $params}"
