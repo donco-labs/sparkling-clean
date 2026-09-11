@@ -291,7 +291,7 @@ if [[ -n $sizes ]]; then
     clean-safe    "Caches that regenerate with no action from you. Dry-run by default: add --apply to actually remove. From a clone: make clean-safe."
     clean-more    "Includes tier 1, plus caches that cost a re-download or a rebuild. Dry-run by default: add --apply. From a clone: make clean-more."
     docker-clean  "Neither reclaim tier touches Docker. sparkling-clean docker prunes build cache and untagged images, never volumes; --apply --compact to also shrink the disk image. From a clone: make docker-clean."
-    yours         "Data, not cache. sparkling-clean reclaim --tier 3 lists these for you to decide on and never deletes any of it."
+    yours         "Data, not cache. sparkling-clean reclaim --tier 3 lists these for you to decide on and never deletes any of them — note that the tiers are cumulative, so adding --apply to that would still clear tiers 1 and 2. From a clone: make review."
   )
   # Every one of these is initialised, because `local name` with no value is
   # `typeset name` at script scope, and zsh PRINTS an existing parameter rather
