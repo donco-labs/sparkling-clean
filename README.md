@@ -139,9 +139,12 @@ every row for the first week after the history starts. Samples are pruned at 180
 days and cost a couple of KB a day.
 
 Rows are **grouped by what would reclaim them**, so the list says not just where
-the space is but what to do about it: `make clean-safe`, `make clean-more`,
-`make docker-clean`, and a `Yours` group for data nothing automated will ever
-delete. `(part)` marks a directory where only a subtree is reclaimed —
+the space is but what to do about it: `sparkling-clean reclaim`, the same with
+`--tier 2`, `sparkling-clean docker`, and a `Yours` group for data nothing
+automated will ever delete. Headings name the CLI rather than the make targets,
+because a Homebrew install has no Makefile — and because the CLI form is
+dry-run until you add `--apply`, where `make clean-safe` already carries it. The
+heading tooltips give the make shortcut for anyone working from a clone. `(part)` marks a directory where only a subtree is reclaimed —
 `~/Library/Caches` is watched whole, but tier 1 removes eight named children of
 it. That mapping is a table in `common.zsh` rather than something derived from
 `reclaim.zsh`, whose rules are globs and tool invocations; `make lint` fails if

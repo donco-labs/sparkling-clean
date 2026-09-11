@@ -874,9 +874,12 @@ typeset -ga SC_WATCH_PATHS=(
   ~/Library/Developer/Xcode
 )
 
-# What would act on each watched directory, so the menu can say so. The value is
-# a make target, or "yours" for data nothing automated will ever touch; "/part"
-# marks a directory where only a subtree is reclaimed, which is the common case
+# What would act on each watched directory, so the menu can say so. The value
+# names a reclaim group -- clean-safe is `sparkling-clean reclaim`, clean-more is
+# `--tier 2`, docker-clean is `sparkling-clean docker` -- or "yours" for data
+# nothing automated will ever touch. The callers spell the command out; the make
+# targets of the same name are clone-only wrappers over those same invocations.
+# "/part" marks a directory where only a subtree is reclaimed, the common case
 # -- ~/Library/Caches is watched whole, but tier 1 removes eight named children
 # of it, so labelling the row "clean-safe" flat would promise the whole 6 GB.
 #
@@ -914,7 +917,7 @@ typeset -gA SC_WATCH_TARGET=(
   "$HOME/.m2/repository"                                   "yours"
 )
 
-sc_watch_target() {  # path -> "<make target>[/part]" or "yours"
+sc_watch_target() {  # path -> "<reclaim group>[/part]" or "yours"
   print -r -- ${SC_WATCH_TARGET[$1]:-yours}
 }
 

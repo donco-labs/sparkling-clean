@@ -274,11 +274,24 @@ if [[ -n $sizes ]]; then
   # set still reads.
   local -A group_rows
   local -a order=(clean-safe clean-more docker-clean yours)
+  #
+  # Headings name the CLI, not the make target. `make clean-safe` exists only in
+  # a clone -- the Homebrew install ships bin/sparkling-clean and no Makefile,
+  # and the targets are one-line wrappers over the CLI anyway. The CLI form is
+  # also the safer thing to put in a menu: it is dry-run until you add --apply,
+  # where the make targets already carry it. The heading tooltips name the make
+  # shortcut for anyone working from a checkout.
   local -A heading=(
-    clean-safe    "Tier 1 · make clean-safe"
-    clean-more    "Tier 2 · make clean-more"
-    docker-clean  "Containers · make docker-clean"
+    clean-safe    "Tier 1 · sparkling-clean reclaim"
+    clean-more    "Tier 2 · sparkling-clean reclaim --tier 2"
+    docker-clean  "Containers · sparkling-clean docker"
     yours         "Yours · never reclaimed automatically"
+  )
+  local -A heading_tip=(
+    clean-safe    "Caches that regenerate with no action from you. Dry-run by default: add --apply to actually remove. From a clone: make clean-safe."
+    clean-more    "Includes tier 1, plus caches that cost a re-download or a rebuild. Dry-run by default: add --apply. From a clone: make clean-more."
+    docker-clean  "Neither reclaim tier touches Docker. sparkling-clean docker prunes build cache and untagged images, never volumes; --apply --compact to also shrink the disk image. From a clone: make docker-clean."
+    yours         "Data, not cache. sparkling-clean reclaim --tier 3 lists these for you to decide on and never deletes any of it."
   )
   # Every one of these is initialised, because `local name` with no value is
   # `typeset name` at script scope, and zsh PRINTS an existing parameter rather
@@ -326,9 +339,9 @@ if [[ -n $sizes ]]; then
       tip+=" · no trend yet, needs a second measurement"
     fi
     case $tgt in
-      (clean-safe)   tip+=" · make clean-safe reclaims ${part:+named caches inside }this" ;;
-      (clean-more)   tip+=" · make clean-more reclaims ${part:+part of }this, at the cost of a re-download" ;;
-      (docker-clean) tip+=" · neither clean target touches this — make docker-clean does" ;;
+      (clean-safe)   tip+=" · sparkling-clean reclaim takes ${part:+named caches inside }this" ;;
+      (clean-more)   tip+=" · sparkling-clean reclaim --tier 2 takes ${part:+part of }this, at the cost of a re-download" ;;
+      (docker-clean) tip+=" · neither reclaim tier touches this — sparkling-clean docker does" ;;
       (*)            tip+=" · data, not cache: nothing here will delete it for you" ;;
     esac
 
@@ -341,7 +354,7 @@ if [[ -n $sizes ]]; then
   for g in $order; do
     [[ -n ${group_rows[$g]:-} ]] || continue
     print -r -- "-----"
-    print -r -- "--${SC_TINT_DIM}${heading[$g]} | color=gray ansi=true"
+    print -r -- "--${SC_TINT_DIM}${heading[$g]} | color=gray ansi=true tooltip=\"${heading_tip[$g]//\"/}\""
     print -rn -- "${group_rows[$g]}"
   done
 
