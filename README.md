@@ -98,6 +98,17 @@ plugin-name lookup for the `swiftbar://refreshplugin` URL
 warning the moment you thin rather than up to ten minutes later. The other
 preserves explicit SF Symbol rendering, which is how the menu bar icon is drawn.
 
+**Row colour is an ANSI escape, not the `color=` parameter.** On macOS 26,
+SwiftBar wraps any row styled with `color=` in a tracking subclass that forces
+the selected-item text colour while the pointer is over it, and the restore on
+the way out does not take: the row keeps the highlight colour until the whole
+menu is rebuilt. An orange WARN went dark on rollover and stayed dark until the
+menu was closed and reopened. ANSI-coloured rows are exempt from that wrapper,
+so every coloured row carries a `\e[38;5;NNNm` prefix and `ansi=true`. The
+`color=` parameter stays on the row regardless — SwiftBar gives a row a target
+only when it has an action *or* a colour, and a targetless row is auto-disabled:
+dimmed, and refusing to highlight at all. Verified against 2.1.2 beta 3.
+
 **Homebrew still records the stable version afterwards.** The cask is
 `auto_updates`, so brew will not revert it on its own — but a cask upgrade will,
 silently, and the grey submenus come back with it. That is also the rollback if
