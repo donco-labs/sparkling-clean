@@ -41,6 +41,20 @@ else
 fi
 
 # ====================================================== 3. TIME MACHINE =====
+# Warm the last backup's figures before printing anything that reads them. The
+# guard normally has them cached already; this covers the report being the first
+# thing run after a backup completes, which is otherwise the one case where the
+# most detailed surface has the least to say. Same ordering rule as the guard --
+# a refresh launched after the lines are built cannot reach them.
+#
+# The wait is affordable here for a different reason than in the guard: this
+# report walks 100k-entry trees and takes tens of seconds, so a second spent
+# once per backup does not register.
+if sc_tm_last_stats_stale; then
+  ( nice -n 15 zsh -c "source ${0:A:h}/lib/common.zsh; sc_tm_last_stats_refresh" >/dev/null 2>&1 & ) &!
+  sc_tm_last_stats_wait "$(sc_tm_last_backup_epoch)"
+fi
+
 sc_hdr "Time Machine"
 if sc_tm_enabled; then
   sc_ok "automatic backups ON"
@@ -64,6 +78,18 @@ if tm_days=$(sc_tm_days_since_backup); then
 else
   sc_warn "last completed backup: UNKNOWN (could not read TM preferences)"
 fi
+
+# What that backup actually moved. Added against total is the full-vs-incremental
+# answer, and the menu bar has carried it in its headline for a while; the report
+# had nothing, which put the detail on the glanceable surface and not on the
+# thorough one.
+#
+# Unconditional rather than tucked into the healthy branch above: it prints
+# nothing when the figures are unavailable, and that is already every backup old
+# enough to have tripped the WARN -- the info-level log holds roughly
+# SC_TM_LOG_MAX_H hours and the WARN threshold is counted in days.
+local tm_wrote
+tm_wrote=$(sc_tm_last_sentence) && sc_info "$tm_wrote"
 
 if sc_tm_running; then
   local prog=$(sc_tm_progress_pct)

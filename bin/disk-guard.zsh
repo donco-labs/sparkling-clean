@@ -29,6 +29,31 @@ done
 local STATE=$SC_STATE_DIR/guard.state
 mkdir -p $SC_STATE_DIR
 
+# The last backup's figures, warmed BEFORE the checks rather than after.
+#
+# `log show --info` runs about a second, so it is not something to re-pay on
+# every render -- but the cache is keyed to the BACKUP, not to a clock, so a
+# stale cache means a backup has completed since the last run. That is hourly at
+# most. Waiting for it costs a second an hour; the renders in between still pay
+# nothing, which is the trade the detached refresh was protecting.
+#
+# This used to sit below sc_run_health_checks and only launch the refresh, so
+# the figures always landed one run late. On an hourly backup against a
+# ten-minute menu bar that left the Backup row showing a time with no size for a
+# whole render window after every backup -- about one look in six, which reads
+# as a missing feature rather than a pending one.
+#
+# ORDER IS THE POINT: sc_run_health_checks builds the Backup row's headline and
+# detail from this cache, so a refresh that finishes after it has run cannot
+# reach this pass. Anything warming the cache has to go above this line.
+#
+# The launch stays fully detached so that giving up on the wait does not kill
+# the refresh: it finishes on its own and the figures are there next run.
+if sc_tm_last_stats_stale; then
+  ( nice -n 15 zsh -c "source ${0:A:h}/lib/common.zsh; sc_tm_last_stats_refresh" >/dev/null 2>&1 & ) &!
+  sc_tm_last_stats_wait "$(sc_tm_last_backup_epoch)"
+fi
+
 sc_run_health_checks
 
 # Sizing the watchlist costs ~10s of directory walking. The guard runs every two
@@ -38,15 +63,6 @@ sc_run_health_checks
 # the problem it exists to find.
 if sc_sizes_stale; then
   ( nice -n 15 zsh -c "source ${0:A:h}/lib/common.zsh; sc_sizes_refresh" >/dev/null 2>&1 & ) &!
-fi
-
-# Same bargain for the last backup's size: `log show --info` runs about a
-# second, so it happens here rather than in the ten-minute menu bar render.
-# Keyed to the backup itself, so this fires once per completed backup and then
-# never again for it. The clause appears on the NEXT run, like the watchlist --
-# a check that blocked on its own cache warming would be the wrong trade.
-if sc_tm_last_stats_stale; then
-  ( nice -n 15 zsh -c "source ${0:A:h}/lib/common.zsh; sc_tm_last_stats_refresh" >/dev/null 2>&1 & ) &!
 fi
 
 local level=$(sc_overall_level) rc=0

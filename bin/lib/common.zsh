@@ -264,6 +264,17 @@ sc_tm_interval_human() {
 : ${SC_TM_LAST_CACHE:=$SC_STATE_DIR/tm-last.tsv}
 : ${SC_TM_LOG_MAX_H:=15}
 
+# Write the cache in one step. A render polls this file while the refresh is
+# writing it (see sc_tm_last_stats_wait), and a plain ">" truncates first, so a
+# poll landing in that window would read a half-written row and conclude the
+# figures were unavailable. Rename is atomic; truncate-then-write is not.
+sc_tm_last_cache_put() {
+  local tmp=${SC_TM_LAST_CACHE}.$$
+  printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" > $tmp 2>/dev/null \
+    && mv -f $tmp $SC_TM_LAST_CACHE 2>/dev/null \
+    || rm -f $tmp 2>/dev/null
+}
+
 # "1 hour, 47 minutes, 33.000 seconds" -> "1h47m"; "9.264 seconds" -> "9s".
 # The menu bar has no room for prose and the seconds are noise on anything
 # that ran for minutes.
@@ -301,7 +312,7 @@ sc_tm_last_stats_refresh() {
   # Past the retention horizon there is nothing to find. Record that against
   # this backup so the query is not repeated for it.
   if (( age_h >= SC_TM_LOG_MAX_H )); then
-    printf '%s\t\t\t\n' "$e" > $SC_TM_LAST_CACHE
+    sc_tm_last_cache_put "$e" "" "" ""
     return 0
   fi
 
@@ -321,7 +332,46 @@ sc_tm_last_stats_refresh() {
   added=$(sc_tm_norm_size "$added"); total=$(sc_tm_norm_size "$total")
   [[ -n $elapsed ]] && elapsed=$(sc_tm_elapsed_short "$elapsed")
 
-  printf '%s\t%s\t%s\t%s\n' "$e" "$added" "$total" "$elapsed" > $SC_TM_LAST_CACHE
+  sc_tm_last_cache_put "$e" "$added" "$total" "$elapsed"
+}
+
+# How long a render may wait for a fresh backup's figures. Measured on this
+# machine: `log show` costs 1.1-2.6s, and the window size barely moves it --
+# most of it is a fixed startup, so a 1h query is no cheaper than a 15h one.
+# Three seconds covers the slow end and gives up rather than hanging a render.
+: ${SC_TM_STATS_WAIT_MS:=3000}
+
+# Wait, briefly, for a refresh that is already running in the background.
+#
+# The refresh stays detached and the cost model is unchanged: blocking a render
+# on `log show` every ten minutes would make the monitor a source of the load it
+# exists to watch for. What makes a short wait affordable is that the cache is
+# keyed to the BACKUP rather than to a clock, so a stale cache means a backup
+# has completed since the last run. That is hourly at most, not every render --
+# 24 waits a day against the 144 renders the original comment was rejecting.
+#
+# Without this the figures were simply absent from the first render after every
+# backup. On an hourly cadence against a ten-minute plugin that left the Backup
+# row sizeless for a whole render window every hour, and a reader who looked in
+# that window -- roughly one look in six -- concluded the feature did not exist.
+#
+# Polls the cache rather than waiting on a pid: the refresh is launched fully
+# detached, so there is nothing to wait(1) on, and it has to stay that way so
+# the job still finishes and populates the cache when this gives up early.
+sc_tm_last_stats_wait() {
+  local e=$1 max=${2:-$SC_TM_STATS_WAIT_MS} waited=0 cached
+  [[ -n $e ]] || return 1
+  while (( waited < max )); do
+    sleep 0.1
+    (( waited += 100 ))
+    [[ -r $SC_TM_LAST_CACHE ]] || continue
+    IFS=$'\t' read -r cached _ < $SC_TM_LAST_CACHE
+    # Keyed to this backup is the whole test. An empty "added" against a
+    # matching key is the recorded "log has aged out" answer, which is final --
+    # waiting longer for it would burn the full timeout on every render.
+    [[ $cached == $e ]] && return 0
+  done
+  return 1
 }
 
 # True when the cache does not describe the backup that is currently the latest.
@@ -356,16 +406,28 @@ sc_tm_last_short() {
 # is self-evidently incremental, and needs no assumption about what an
 # undocumented string means. A first backup writes essentially the whole thing,
 # so the two numbers converge and the ratio says so without being told.
-sc_tm_last_clause() {
+# The phrasing itself, lowercase and unpunctuated so each surface can place it
+# in its own house style: the report opens its lines lowercase and ends them
+# without a full stop, the tooltip needs a sentence. Kept in one place because
+# it is one fact -- two copies of this string drift the moment either is edited.
+sc_tm_last_sentence() {
   local stats added total elapsed
-  stats=$(sc_tm_last_stats) || return 0
+  stats=$(sc_tm_last_stats) || return 1
   IFS=$'\t' read -r added total elapsed <<< "$stats"
-  [[ -n $added && -n $total ]] || return 0
-  print -rn -- " Wrote ${added} into a ${total} backup${elapsed:+ in ${elapsed}}."
+  [[ -n $added && -n $total ]] || return 1
+  print -rn -- "wrote ${added} into a ${total} backup${elapsed:+ in ${elapsed}}"
 }
-# NOTE: only non-OK rows render their detail, so this clause reaches a reader
-# only on the unhealthy path. The healthy case is carried by sc_tm_last_short
-# in the headline.
+
+sc_tm_last_clause() {
+  local s; s=$(sc_tm_last_sentence) || return 0
+  print -rn -- " ${(U)s[1]}${s[2,-1]}."
+}
+# NOTE: this used to reach a reader on the unhealthy path only, because visible
+# detail rows are printed for problems. That stopped being true when the menu
+# moved every row's detail into a tooltip: the healthy row's sentence is now one
+# hover away, and this is what it says. The headline still carries
+# sc_tm_last_short for the reader who never hovers, so the numbers survive
+# either way.
 
 # Cheap. Prints "<added>\t<total>\t<elapsed>" for the current last backup, or
 # nothing at all -- an empty read is the normal state on a machine whose last
