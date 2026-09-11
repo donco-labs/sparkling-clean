@@ -100,5 +100,6 @@ plugin-refresh: ## Redraw the menu bar now, without waiting for the 10m tick
 lint: ## Syntax-check every script
 	@for f in bin/*.zsh bin/lib/*.zsh; do zsh -n $$f && echo "  ok  $$f"; done
 	@plutil -lint $(PLIST_SRC)
+	@zsh -c 'source bin/lib/common.zsh; sc_watch_target_lint'
 
 .PHONY: help report brief check dry clean-safe clean-more review docker docker-clean tm-status tm-exclude tm-exclude-apply install-guard uninstall-guard guard-status log lint plugin-dev plugin-brew plugin-status plugin-refresh

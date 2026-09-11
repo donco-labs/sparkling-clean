@@ -874,6 +874,66 @@ typeset -ga SC_WATCH_PATHS=(
   ~/Library/Developer/Xcode
 )
 
+# What would act on each watched directory, so the menu can say so. The value is
+# a make target, or "yours" for data nothing automated will ever touch; "/part"
+# marks a directory where only a subtree is reclaimed, which is the common case
+# -- ~/Library/Caches is watched whole, but tier 1 removes eight named children
+# of it, so labelling the row "clean-safe" flat would promise the whole 6 GB.
+#
+# This is a table rather than something derived from reclaim.zsh because those
+# rules are globs, mtime filters and tool invocations (`brew cleanup`, `uv cache
+# prune`), not a list of paths. The cost of a table is drift, so `make lint`
+# fails when a watched path has no entry here or an entry names a path that is
+# no longer watched. Keep it in step with bin/reclaim.zsh by hand.
+typeset -gA SC_WATCH_TARGET=(
+  # tier 1 -- make clean-safe
+  "$HOME/Library/Developer/Xcode"                          "clean-safe/part"
+  "$HOME/Library/Caches"                                   "clean-safe/part"
+  "$HOME/Library/pnpm"                                     "clean-safe/part"
+  "$HOME/.npm"                                             "clean-safe/part"
+  # tier 2 -- make clean-more
+  "$HOME/.gradle"                                          "clean-more/part"
+  # containers, which neither tier touches
+  "$HOME/Library/Containers/com.docker.docker"             "docker-clean"
+  # tier 3 and unclassified: reported, never automated
+  "$HOME/Library/Application Support/com.apple.container"  "yours"
+  "$HOME/Library/Application Support/Claude/vm_bundles"    "yours"
+  "$HOME/Library/Containers/com.inferencer"                "yours"
+  "$HOME/Downloads"                                        "yours"
+  "$HOME/models"                                           "yours"
+  "$HOME/.ollama"                                          "yours"
+  "$HOME/.cache"                                           "yours"
+  "$HOME/.rustup"                                          "yours"
+  "$HOME/.konan"                                           "yours"
+  "$HOME/.sdkman"                                          "yours"
+  "$HOME/.pub-cache"                                       "yours"
+  "$HOME/fvm"                                              "yours"
+  "$HOME/go/pkg"                                           "yours"
+  "$HOME/.vscode/extensions"                               "yours"
+  "$HOME/.cargo/registry"                                  "yours"
+  "$HOME/.m2/repository"                                   "yours"
+)
+
+sc_watch_target() {  # path -> "<make target>[/part]" or "yours"
+  print -r -- ${SC_WATCH_TARGET[$1]:-yours}
+}
+
+# Fails when the table above and the watch list have drifted apart. Run by
+# `make lint`, because the failure mode otherwise is a menu row quietly
+# promising that `make clean-safe` will empty a directory it never touches.
+sc_watch_target_lint() {
+  local p rc=0
+  local -a watched=(${(f)"$(sc_watch_paths_effective)"})
+  for p in $watched; do
+    [[ -n ${SC_WATCH_TARGET[$p]:-} ]] || { print -ru2 -- "  watch path with no target: ${p/#$HOME/~}"; rc=1 }
+  done
+  for p in ${(k)SC_WATCH_TARGET}; do
+    (( ${watched[(Ie)$p]} )) || { print -ru2 -- "  target for unmeasured path: ${p/#$HOME/~}"; rc=1 }
+  done
+  (( rc )) || print -r -- "  ok  watch targets (${#SC_WATCH_TARGET} paths)"
+  return $rc
+}
+
 # Sizing this set costs ~10s of directory walking — fine twice a day, absurd
 # every ten minutes. A menu bar item that generated sustained metadata I/O would
 # be causing the exact problem this toolkit exists to detect. So: cache it, and
@@ -891,15 +951,12 @@ sc_sizes_age_hours() {
 sc_sizes_stale() { (( $(sc_sizes_age_hours) >= SC_SIZES_MAX_AGE_H )) }
 
 # Writes "<bytes>\t<path>" for everything that exists, biggest first.
-sc_sizes_refresh() {
-  mkdir -p ${SC_SIZES_CACHE:h}
-  local tmp=${SC_SIZES_CACHE}.$$
-  local c sz
-
-  # Drop any watched path that lives inside another one — ~/.gradle/caches under
-  # ~/.gradle, DerivedData under ~/Library/Developer/Xcode. Without this the
-  # child is counted twice in the total and both rows appear in the list, which
-  # reads as though the space is in two places.
+# The watch list with nested entries dropped -- ~/.gradle/caches under
+# ~/.gradle, DerivedData under ~/Library/Developer/Xcode. Without this the child
+# is counted twice in the total and both rows appear in the list, which reads as
+# though the space is in two places. This is what actually gets measured, so it
+# is also the set the target table is linted against.
+sc_watch_paths_effective() {
   local -a keep=()
   local a b nested
   for a in ${(o)SC_WATCH_PATHS}; do
@@ -907,16 +964,110 @@ sc_sizes_refresh() {
     for b in $keep; do [[ $a == ${b}/* ]] && { nested=1; break } ; done
     (( nested )) || keep+=($a)
   done
+  print -rl -- $keep
+}
 
+sc_sizes_refresh() {
+  mkdir -p ${SC_SIZES_CACHE:h}
+  local tmp=${SC_SIZES_CACHE}.$$
+  local c sz
+
+  # An interrupted refresh -- the guard backgrounds this and the machine sleeps,
+  # or a walk is killed -- used to leave its scratch file behind in the state
+  # directory forever. zsh scopes a trap set inside a function to that function.
+  trap "rm -f ${(q)tmp}" EXIT INT TERM
+
+  local -a keep=(${(f)"$(sc_watch_paths_effective)"})
   for c in $keep; do
     [[ -e $c ]] || continue
     sz=$(sc_size_of $c)
     (( sz > 0 )) && printf '%s\t%s\n' "$sz" "$c"
   done | sort -rn > $tmp
   mv -f $tmp $SC_SIZES_CACHE
+
+  # Same numbers, kept rather than overwritten, so the next read can say which
+  # way each directory is moving. Appended after the cache is in place: a
+  # history sample nothing can corroborate is worse than none.
+  sc_sizes_history_append "$(stat -f %m $SC_SIZES_CACHE 2>/dev/null)" < $SC_SIZES_CACHE
+  sc_sizes_history_prune
 }
 
 sc_sizes_read() { [[ -r $SC_SIZES_CACHE ]] && cat $SC_SIZES_CACHE }
+
+# A point-in-time size tells you what a directory holds; only a series tells you
+# whether it is growing, which is the question the watchlist exists to answer.
+# sizes.tsv is overwritten on every refresh, so each measurement is also
+# appended here: "<epoch>\t<bytes>\t<path>", oldest first. At two refreshes a
+# day over ~22 paths that is a couple of KB a day, and it is pruned to
+# SC_SIZES_HISTORY_DAYS, so the file settles well under a megabyte.
+: ${SC_SIZES_HISTORY:=$SC_STATE_DIR/sizes-history.tsv}
+: ${SC_SIZES_HISTORY_DAYS:=180}
+# A week reads well at a twice-daily cadence: ~14 samples, long enough that a
+# single large download does not dominate, short enough to still be news.
+: ${SC_TREND_WINDOW_D:=7}
+# du rounds, caches breathe, and a browser writing a few MB is not creep. Deltas
+# below this are reported as steady rather than as movement.
+: ${SC_TREND_NOISE:=52428800}          # 50 MB
+
+sc_sizes_history_append() {  # $1 = sample epoch (default now) · stdin "<bytes>\t<path>"
+  local now=${1:-$(date +%s)} b pth
+  mkdir -p ${SC_SIZES_HISTORY:h}
+  while IFS=$'\t' read -r b pth; do
+    [[ -n $b && -n $pth ]] && printf '%s\t%s\t%s\n' "$now" "$b" "$pth"
+  done >> $SC_SIZES_HISTORY
+}
+
+sc_sizes_history_prune() {
+  [[ -r $SC_SIZES_HISTORY ]] || return 0
+  local cutoff=$(( $(date +%s) - SC_SIZES_HISTORY_DAYS * 86400 ))
+  local tmp=${SC_SIZES_HISTORY}.$$
+  trap "rm -f ${(q)tmp}" EXIT INT TERM
+  awk -F'\t' -v c=$cutoff '$1 >= c' $SC_SIZES_HISTORY > $tmp && mv -f $tmp $SC_SIZES_HISTORY
+}
+
+# Samples for one path, oldest first, in the same "<epoch> <bytes>" shape
+# sc_sparkline and sc_series_delta read. The file is appended in time order, so
+# no sort is needed.
+sc_sizes_series() {  # $1 = path · $2 = days (default SC_TREND_WINDOW_D)
+  [[ -r $SC_SIZES_HISTORY ]] || return 1
+  local cutoff=$(( $(date +%s) - ${2:-$SC_TREND_WINDOW_D} * 86400 ))
+  awk -F'\t' -v c=$cutoff -v p="$1" '$1 >= c && $3 == p { print $1, $2 }' $SC_SIZES_HISTORY
+}
+
+# Signed byte delta between the oldest and newest sample on stdin. Non-zero exit
+# when there is no baseline yet, which is the honest answer for the first week
+# after this ships and for any directory that has only just appeared.
+sc_series_delta() {  # reads "<epoch> <bytes>" lines on stdin
+  local -a b; local ts by
+  while read -r ts by; do b+=($by); done
+  (( ${#b} < 2 )) && return 1
+  print -r -- $(( b[-1] - b[1] ))
+}
+
+sc_sizes_delta() {  # $1 = path · $2 = days -> signed bytes, or non-zero exit
+  sc_sizes_series "$1" ${2:-$SC_TREND_WINDOW_D} | sc_series_delta
+}
+
+# The watch set as one number per measurement. Every path is stamped with the
+# same epoch by a refresh, so summing per timestamp gives the total's own series
+# -- which is what the footer needs. Derived here rather than by adding up the
+# per-path deltas, so it includes the directories too small to earn a row.
+sc_sizes_total_series() {  # $1 = days (default SC_TREND_WINDOW_D)
+  [[ -r $SC_SIZES_HISTORY ]] || return 1
+  local cutoff=$(( $(date +%s) - ${1:-$SC_TREND_WINDOW_D} * 86400 ))
+  awk -F'\t' -v c=$cutoff '$1 >= c { s[$1] += $2 } END { for (t in s) print t, s[t] }' \
+    $SC_SIZES_HISTORY | sort -n
+}
+
+# Arrows rather than +/- because the row is scanned, not read: direction should
+# survive peripheral vision. Movement under the noise floor is not an arrow.
+sc_human_delta() {  # signed bytes -> "^1.2 GB" / "v1.2 GB" / "steady"
+  local d=${1:-0}
+  if   (( d >=  SC_TREND_NOISE )); then printf '↑%s' "$(sc_human $d)"
+  elif (( d <= -SC_TREND_NOISE )); then printf '↓%s' "$(sc_human $(( -d )))"
+  else                                  printf 'steady'
+  fi
+}
 
 # ----------------------------------------------------------------- trends --
 # The guard logs free bytes on every run, so a point-in-time check becomes a

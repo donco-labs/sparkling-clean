@@ -253,26 +253,126 @@ if [[ -n $sizes ]]; then
   # No cap — this is a submenu and the whole point is seeing the shape of the
   # set. A floor instead, so trivial entries do not pad the list.
   : ${SC_WATCH_FLOOR:=104857600}          # 100 MB
-  # Rows are deliberately inert. 0.4.0 gave them a
+  # Rows carry a colour and a tooltip, which took some care: 0.4.0 gave them a
   #   | bash=/usr/bin/open param1="<path>" terminal=false
-  # action and the submenu stopped opening at all; at 0.3.2, with these rows
-  # bare, it opened. That is the whole of what is established.
+  # action and the submenu stopped opening at all, so for two versions these
+  # rows were left bare on the theory that submenu rows tolerate no parameters.
+  # That theory was wrong -- colour and tooltip parameters are fine, verified in
+  # SwiftBar on 2026-09-11 -- and the suspicion still stands where it started:
+  # an unquotable space in a bash= param value, not parameters as such.
   #
-  # The mechanism is NOT established. Several of these paths contain spaces and
-  # SwiftBar does not document how a param value containing spaces should be
-  # written, so that is the suspicion — but it is a suspicion, not a finding.
+  # They are not decoration. A row with no colour gets no target from SwiftBar,
+  # and a targetless row is disabled: it renders dim AND never highlights, which
+  # also means it never shows a tooltip. The tooltip is where a row's trend and
+  # its reclaim story live, so the colour is what makes them reachable at all.
   #
-  # Do not add an action here again without opening the menu in SwiftBar and
-  # looking. The emitted line looks perfectly correct printed to a terminal,
-  # which is exactly how the broken version shipped.
-  print -r -- "$sizes" | while IFS=$'\t' read -r b pth; do
+  # Grouped by what would actually reclaim the directory rather than listed flat
+  # by size. A flat list needed a tag column on every row, and SwiftBar sizes the
+  # dropdown to its longest row -- size plus delta plus tag plus a 50-character
+  # path is a menu that spans the screen. A heading costs one row per group and
+  # none per entry. Sorting is untouched inside each group, so the shape of the
+  # set still reads.
+  local -A group_rows
+  local -a order=(clean-safe clean-more docker-clean yours)
+  local -A heading=(
+    clean-safe    "Tier 1 · make clean-safe"
+    clean-more    "Tier 2 · make clean-more"
+    docker-clean  "Containers · make docker-clean"
+    yours         "Yours · never reclaimed automatically"
+  )
+  # Every one of these is initialised, because `local name` with no value is
+  # `typeset name` at script scope, and zsh PRINTS an existing parameter rather
+  # than redeclaring it -- which put "delta=..." and "tip=..." lines into the
+  # menu, each one rendering as a row.
+  local b="" pth="" tgt="" part="" series="" delta="" spark="" dlabel="" tip="" row=""
+  local shown=0
+  # A here-string rather than a pipe: a `while read` on the right of a pipe runs
+  # in a subshell, and every group built inside it would be discarded at the done.
+  while IFS=$'\t' read -r b pth; do
+    tgt=$(sc_watch_target "$pth"); part=""
+    [[ $tgt == */part ]] && { part=" (part)"; tgt=${tgt%/part} }
+
+    series=$(sc_sizes_series "$pth" 2>/dev/null)
+    delta=""; spark=""
+    if [[ -n $series ]]; then
+      delta=$(print -r -- "$series" | sc_series_delta) || delta=""
+      spark=$(print -r -- "$series" | sc_sparkline)    || spark=""
+    fi
+    if [[ -n $delta ]]; then
+      dlabel=$(sc_human_delta $delta)
+    else
+      # Honest rather than reassuring: one measurement is not a trend, and for
+      # the first week after this ships that is every row.
+      dlabel="new"
+    fi
+
     (( b >= SC_WATCH_FLOOR )) || continue
-    printf -- '--%10s  %s\n' "$(sc_human $b)" "${pth/#$HOME/~}"
+    (( shown++ ))
+
+    # The tooltip says what the row cannot fit: where it has been, and what
+    # would reclaim it. "(part)" in the row is the warning; this is the detail.
+    tip="$(sc_human $b) now"
+    if [[ -n $delta ]]; then
+      # The sparkline is scaled to its own range, so a directory that moved 30 MB
+      # draws the same dramatic slope as one that moved 30 GB. Naming the number
+      # a steady row actually moved by is what keeps the picture honest.
+      if [[ $dlabel == steady ]]; then
+        tip+=" · steady over ${SC_TREND_WINDOW_D}d (±$(sc_human $(( delta < 0 ? -delta : delta ))))"
+      else
+        tip+=" · ${dlabel} in ${SC_TREND_WINDOW_D}d"
+      fi
+      [[ -n $spark ]] && tip+=" · ${spark}"
+    else
+      tip+=" · no trend yet, needs a second measurement"
+    fi
+    case $tgt in
+      (clean-safe)   tip+=" · make clean-safe reclaims ${part:+named caches inside }this" ;;
+      (clean-more)   tip+=" · make clean-more reclaims ${part:+part of }this, at the cost of a re-download" ;;
+      (docker-clean) tip+=" · neither clean target touches this — make docker-clean does" ;;
+      (*)            tip+=" · data, not cache: nothing here will delete it for you" ;;
+    esac
+
+    row=$(printf -- '--%s%10s  %-7s  %s%s' \
+      "$SC_TINT_DIM" "$(sc_human $b)" "$dlabel" "${pth/#$HOME/~}" "$part")
+    group_rows[$tgt]+="${row} | color=gray ansi=true tooltip=\"${tip//\"/}\""$'\n'
+  done <<< "$sizes"
+
+  local g=""
+  for g in $order; do
+    [[ -n ${group_rows[$g]:-} ]] || continue
+    print -r -- "-----"
+    print -r -- "--${SC_TINT_DIM}${heading[$g]} | color=gray ansi=true"
+    print -rn -- "${group_rows[$g]}"
   done
+
+  # The total earns the same trend the rows have -- it is the number that
+  # answers "is this machine filling up", and a figure with no direction cannot.
+  # Its series comes from the history rather than from summing the rows above,
+  # so the directories under the display floor are counted in the movement too.
   local tot=$(print -r -- "$sizes" | awk -F'\t' '{s+=$1} END{print s+0}')
   local cnt=$(print -r -- "$sizes" | grep -c .)
+  local totline="$(sc_human $tot) across ${cnt} watched directories"
+  local tseries=$(sc_sizes_total_series 2>/dev/null)
+  local tdelta="" tspark="" ttip="$(sc_human $tot) now"
+  if [[ -n $tseries ]]; then
+    tdelta=$(print -r -- "$tseries" | sc_series_delta) || tdelta=""
+    tspark=$(print -r -- "$tseries" | sc_sparkline)    || tspark=""
+  fi
+  if [[ -n $tdelta ]]; then
+    local tlabel=$(sc_human_delta $tdelta)
+    totline+=" · ${tlabel} in ${SC_TREND_WINDOW_D}d"
+    if [[ $tlabel == steady ]]; then
+      ttip+=" · steady over ${SC_TREND_WINDOW_D}d (±$(sc_human $(( tdelta < 0 ? -tdelta : tdelta ))))"
+    else
+      ttip+=" · ${tlabel} in ${SC_TREND_WINDOW_D}d"
+    fi
+    [[ -n $tspark ]] && ttip+=" · ${tspark}"
+  else
+    ttip+=" · no trend yet, needs a second measurement"
+  fi
+  (( cnt > shown )) && ttip+=" · counts all ${cnt} watched directories, including $(( cnt - shown )) too small to list"
   print -r -- "-----"
-  print -r -- "--${SC_TINT_DIM}$(sc_human $tot) across ${cnt} watched directories | color=gray ansi=true"
+  print -r -- "--${SC_TINT_DIM}${totline} | color=gray ansi=true tooltip=\"${ttip//\"/}\""
   print -r -- "--${SC_TINT_DIM}Caches and images regrow; watch the shape, not the total. | color=gray ansi=true"
 fi
 print -r -- "---"

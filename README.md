@@ -123,12 +123,31 @@ notarized but ships quarantined, so macOS shows its standard first-run dialog;
 approve it in System Settings → Privacy & Security → Open Anyway.
 
 The dropdown also carries a **Watchlist** — the directories where space actually
-accumulates, biggest first, with `~/Downloads` and the toolchain caches included.
-Sizing them costs about ten seconds of directory walking, so it is cached and
-refreshed roughly twice a day by the background guard rather than measured on
-every render: a disk monitor that generated sustained I/O would be causing the
-problem it exists to detect. The numbers are up to half a day old, which is the
-right resolution for watching creep.
+accumulates, with `~/Downloads` and the toolchain caches included. Sizing them
+costs about ten seconds of directory walking, so it is cached and refreshed
+roughly twice a day by the background guard rather than measured on every
+render: a disk monitor that generated sustained I/O would be causing the problem
+it exists to detect. The numbers are up to half a day old, which is the right
+resolution for watching creep.
+
+Each refresh is also **appended to a history** rather than overwriting the last
+one, which turns a size into a trend: every row shows which way it has moved
+over the past week, and the footer totals that movement across the whole set.
+Movement under 50 MB reads as `steady`, because `du` rounds and caches breathe.
+A row with only one measurement behind it says `new` and nothing more — that is
+every row for the first week after the history starts. Samples are pruned at 180
+days and cost a couple of KB a day.
+
+Rows are **grouped by what would reclaim them**, so the list says not just where
+the space is but what to do about it: `make clean-safe`, `make clean-more`,
+`make docker-clean`, and a `Yours` group for data nothing automated will ever
+delete. `(part)` marks a directory where only a subtree is reclaimed —
+`~/Library/Caches` is watched whole, but tier 1 removes eight named children of
+it. That mapping is a table in `common.zsh` rather than something derived from
+`reclaim.zsh`, whose rules are globs and tool invocations; `make lint` fails if
+the table and the watch list drift apart. Hovering any row gives the full
+story: current size, the week's delta, a sparkline, and what the matching target
+would actually take.
 
 Shows a monochrome SF Symbol and nothing else when healthy — a template image, so
 it follows the menu bar appearance like any native item. Severity is weight rather
