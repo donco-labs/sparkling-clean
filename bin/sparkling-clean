@@ -118,7 +118,11 @@ case $cmd in
     sc_thin_snapshots
     local after=$(sc_free_bytes)
     print -r -- ""
-    print -r -- "Reclaimed $(sc_human $(( after - before ))). Snapshots now: $(sc_snapshot_count)."
+    if [[ -n $before && -n $after ]]; then
+      print -r -- "Reclaimed $(sc_human $(( after - before ))). Snapshots now: $(sc_snapshot_count)."
+    else
+      print -r -- "Thinned. Free space could not be measured, so the amount reclaimed is unknown. Snapshots now: $(sc_snapshot_count)."
+    fi
 
     # The menu bar caches its last render for the plugin's interval, so without
     # this the warning persists for up to ten minutes after it stops being true.

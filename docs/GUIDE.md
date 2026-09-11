@@ -30,6 +30,12 @@ and never read `460Gi` as either volume's own quota.
 diskutil info /System/Volumes/Data | grep "Container Free"
 ```
 
+And when that command cannot answer — the volume is not mounted, the call is
+sandboxed, the path is wrong — the honest report is *unknown*, not zero. The
+toolkit says `free space unreadable` and raises WARN rather than CRIT: nothing
+was measured, so no threshold was crossed. A monitor that turns a failed
+measurement into `0% free` has invented the very emergency it exists to detect.
+
 ### 1.2 GiB vs GB
 
 `df -h` reports GiB (1024³). `diskutil` and Finder report GB (1000³).

@@ -30,7 +30,7 @@ done
 
 local before=$(sc_free_bytes)
 print -r -- "${SC_BLD}sparkling-clean reclaim${SC_RST}  tier=$tier  mode=$( (( SC_APPLY )) && print APPLY || print DRY-RUN )"
-print -r -- "free before: $(sc_human $before)  ($(sc_pct_free)%)"
+print -r -- "free before: $(sc_free_h)  ($(sc_pct_free_h))"
 
 # Refuse to start on top of a running backup. sc_tm_pause runs `tmutil disable`,
 # which does not wait politely — it stops the backup in progress. On a machine
@@ -120,10 +120,17 @@ sc_tm_restore
 local after=$(sc_free_bytes)
 sc_hdr "Result"
 if (( SC_APPLY )); then
-  print -r -- "      before   $(sc_human $before)"
-  print -r -- "      after    $(sc_human $after)"
-  print -r -- "      ${SC_BLD}reclaimed $(sc_human $(( after - before )))${SC_RST}   now $(sc_pct_free)% free"
-  sc_log "reclaim tier=$tier freed=$(( after - before )) free_pct=$(sc_pct_free)"
+  # "reclaimed 0 B" is what subtracting two unreadable measurements looked like,
+  # which reads as "this did nothing" rather than "this cannot say".
+  if [[ -n $before && -n $after ]]; then
+    print -r -- "      before   $(sc_human $before)"
+    print -r -- "      after    $(sc_human $after)"
+    print -r -- "      ${SC_BLD}reclaimed $(sc_human $(( after - before )))${SC_RST}   now $(sc_pct_free_h) free"
+    sc_log "reclaim tier=$tier freed=$(( after - before )) free_pct=$(sc_pct_free)"
+  else
+    print -r -- "      ${SC_BLD}reclaimed unknown${SC_RST} — free space could not be measured before/after"
+    sc_log "reclaim tier=$tier freed=unknown free_pct=unknown"
+  fi
 else
   print -r -- "      dry run — nothing removed. Re-run with ${SC_BLD}--apply${SC_RST}."
 fi

@@ -90,7 +90,11 @@ local msg="${(j: :)lines}"
 # ---- log always -------------------------------------------------------------
 # free= and pct= are what make a trend possible later; the per-check refactor
 # dropped them and the history quietly stopped accumulating.
-sc_log "guard $level pct=$(sc_pct_free) free=$(sc_free_bytes) subject=$subject headline=\"$headline\" notes=${(j:,:)SC_NOTES}"
+# An unreadable volume logs "?" rather than an empty field or a zero. The trend
+# reader only matches digits, so a measurement that never happened is skipped
+# instead of being plotted as a cliff to nothing.
+local log_pct=$(sc_pct_free) log_free=$(sc_free_bytes)
+sc_log "guard $level pct=${log_pct:-?} free=${log_free:-?} subject=$subject headline=\"$headline\" notes=${(j:,:)SC_NOTES}"
 
 # ---- de-dup: renotify only on escalation, or once per SC_RENOTIFY_H hours ---
 # State holds TWO independent facts, and conflating them is a bug: the last level

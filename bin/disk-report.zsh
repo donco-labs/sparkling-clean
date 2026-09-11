@@ -14,14 +14,24 @@ local brief=0
 
 # ============================================================ 1. THE NUMBER ==
 sc_hdr "Disk"
-local free=$(sc_free_bytes) total=$(sc_total_bytes) pct=$(sc_pct_free)
-local used=$(( total - free ))
+local free total pct=""
+if free=$(sc_free_bytes) && total=$(sc_total_bytes); then
+  pct=$(sc_pct_free)
+  print -r -- "      container   $(sc_human $total)"
+  print -r -- "      used        $(sc_human $(( total - free )))"
+  print -r -- "      free        $(sc_human $free)   (${pct}%)"
+else
+  # Saying nothing was measured beats printing 0 B used of 0 B, which is what
+  # subtracting two empty strings produced.
+  print -r -- "      container   unknown — diskutil could not report ${SC_DATA_VOLUME}"
+fi
 
-print -r -- "      container   $(sc_human $total)"
-print -r -- "      used        $(sc_human $used)"
-print -r -- "      free        $(sc_human $free)   (${pct}%)"
-
-if   (( pct < SC_CRIT_PCT )); then sc_crit "below ${SC_CRIT_PCT}% free — swap cannot grow, jetsam kills likely"
+# pct is tested for emptiness BEFORE it is compared. Under no_unset an arithmetic
+# test on an unset parameter does not evaluate false, it errors — and a failed
+# (( )) sends the whole if-chain to its else branch, so an unreadable volume
+# printed "healthy headroom" with the error hidden on stderr.
+if   [[ -z $pct ]];            then sc_warn "free space unreadable — nothing was measured, so no threshold was crossed"
+elif (( pct < SC_CRIT_PCT )); then sc_crit "below ${SC_CRIT_PCT}% free — swap cannot grow, jetsam kills likely"
 elif (( pct < SC_WARN_PCT )); then sc_warn "below ${SC_WARN_PCT}% free — reclaim soon"
 else                               sc_ok   "healthy headroom"
 fi

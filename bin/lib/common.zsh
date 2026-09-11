@@ -45,20 +45,44 @@ sc_log() {
 #     and identical on every row. Only `Used` is per-volume. Never sum rows.
 #   * `df -h` reports GiB (1024^3); diskutil and Finder report GB (1000^3).
 #   * Finder counts "purgeable" (snapshots, evictable caches) as free. df does not.
-sc_container_bytes() {  # $1 = "Free" | "Total"
-  local field=${1:?Free|Total}
-  diskutil info $SC_DATA_VOLUME 2>/dev/null \
+#
+# Failure is reported as failure. diskutil can fail to answer -- the volume is
+# not mounted, the command is sandboxed, SC_DATA_VOLUME is wrong -- and the old
+# behaviour was to print nothing and let sc_pct_free substitute a literal 0.
+# "0% free" is a sentence about the disk, and it was being said when nothing had
+# been measured at all: the Disk check read it as below every threshold and
+# raised CRIT, so an unreadable volume looked exactly like a full one, notified
+# as an emergency, and exited 2. These return non-zero and print nothing
+# instead, and every caller is expected to say "unknown" rather than invent one.
+sc_container_bytes() {  # $1 = "Free" | "Total" -> bytes, or non-zero if unreadable
+  local field=${1:?Free|Total} v
+  v=$(diskutil info $SC_DATA_VOLUME 2>/dev/null \
     | grep "Container ${field} Space" \
-    | sed -E 's/.*\(([0-9]+) Bytes\).*/\1/'
+    | sed -E 's/.*\(([0-9]+) Bytes\).*/\1/')
+  [[ $v == <-> ]] || return 1
+  print -r -- $v
 }
 
 sc_free_bytes()  { sc_container_bytes Free }
 sc_total_bytes() { sc_container_bytes Total }
 
 sc_pct_free() {
-  local free=$(sc_free_bytes) total=$(sc_total_bytes)
-  [[ -n $free && -n $total && $total -gt 0 ]] || { print -r -- 0; return }
+  local free total
+  free=$(sc_free_bytes)   || return 1
+  total=$(sc_total_bytes) || return 1
+  (( total > 0 ))         || return 1
   printf '%d' $(( free * 100 / total ))
+}
+
+# For the surfaces. Every one of them used to interpolate the raw helper, so an
+# unreadable volume printed "( %)" or " B" depending on which one it reached.
+sc_free_h() {
+  local v
+  if v=$(sc_free_bytes); then sc_human $v; else print -rn -- "unknown"; fi
+}
+sc_pct_free_h() {
+  local v
+  if v=$(sc_pct_free); then print -rn -- "${v}%"; else print -rn -- "unknown"; fi
 }
 
 sc_human() {  # bytes -> human (GB, base-10, to match diskutil/Finder)
@@ -742,14 +766,21 @@ sc_run_health_checks() {
   # what it is for, which is what happens next. It used to restate the same two
   # numbers, and once the headline carried them the menu bar printed them twice
   # on adjacent rows.
-  local free=$(sc_free_bytes) pct=$(sc_pct_free)
-  local disk_h="${pct}% free ($(sc_human $free))"
-  if   (( pct < SC_CRIT_PCT )); then
-    sc_check CRIT Disk "$disk_h" "Swap cannot grow — expect freezes and app kills."
-  elif (( pct < SC_WARN_PCT )); then
-    sc_check WARN Disk "$disk_h" "Reclaim before it bites."
+  local free pct
+  if ! { free=$(sc_free_bytes) && pct=$(sc_pct_free) }; then
+    # WARN, not CRIT, and the same shape as the Backup check's "age unknown":
+    # not knowing is a state to fix, not a disk emergency to be woken for.
+    sc_check WARN Disk "free space unreadable" \
+      "diskutil could not report container space for ${SC_DATA_VOLUME} — unverified, not healthy. Nothing was measured, so no threshold was crossed; check that the volume is mounted and that diskutil answers."
   else
-    sc_check OK   Disk "$disk_h" "$(sc_human $free) free of $(sc_human $(sc_total_bytes)). Warns below ${SC_WARN_PCT}%, critical below ${SC_CRIT_PCT}%."
+    local disk_h="${pct}% free ($(sc_human $free))"
+    if   (( pct < SC_CRIT_PCT )); then
+      sc_check CRIT Disk "$disk_h" "Swap cannot grow — expect freezes and app kills."
+    elif (( pct < SC_WARN_PCT )); then
+      sc_check WARN Disk "$disk_h" "Reclaim before it bites."
+    else
+      sc_check OK   Disk "$disk_h" "$(sc_human $free) free of $(sc_human $(sc_total_bytes)). Warns below ${SC_WARN_PCT}%, critical below ${SC_CRIT_PCT}%."
+    fi
   fi
 
   # -- backups on at all -------------------------------------------------
