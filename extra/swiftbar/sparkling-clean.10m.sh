@@ -297,7 +297,7 @@ if [[ -n $sizes ]]; then
   # `typeset name` at script scope, and zsh PRINTS an existing parameter rather
   # than redeclaring it -- which put "delta=..." and "tip=..." lines into the
   # menu, each one rendering as a row.
-  local b="" pth="" tgt="" part="" series="" delta="" spark="" dlabel="" tip="" row=""
+  local b="" pth="" tgt="" part="" series="" delta="" spark="" span="" dlabel="" tip="" row=""
   local shown=0
   # A here-string rather than a pipe: a `while read` on the right of a pipe runs
   # in a subshell, and every group built inside it would be discarded at the done.
@@ -306,10 +306,15 @@ if [[ -n $sizes ]]; then
     [[ $tgt == */part ]] && { part=" (part)"; tgt=${tgt%/part} }
 
     series=$(sc_sizes_series "$pth" 2>/dev/null)
-    delta=""; spark=""
+    delta=""; spark=""; span=""
     if [[ -n $series ]]; then
       delta=$(print -r -- "$series" | sc_series_delta) || delta=""
       spark=$(print -r -- "$series" | sc_sparkline)    || spark=""
+      # SC_TREND_WINDOW_D is how far back to look, not how much history exists.
+      # Saying "in 7d" over two samples 12h apart is a claim about a week that
+      # nothing in the file supports -- and for the first week of any install,
+      # that is every row.
+      span=$(print -r -- "$series" | sc_series_span)   || span=""
     fi
     if [[ -n $delta ]]; then
       dlabel=$(sc_human_delta $delta)
@@ -329,10 +334,11 @@ if [[ -n $sizes ]]; then
       # The sparkline is scaled to its own range, so a directory that moved 30 MB
       # draws the same dramatic slope as one that moved 30 GB. Naming the number
       # a steady row actually moved by is what keeps the picture honest.
+      local window=$(sc_window_phrase ${span:-0})
       if [[ $dlabel == steady ]]; then
-        tip+=" · steady over ${SC_TREND_WINDOW_D}d (±$(sc_human $(( delta < 0 ? -delta : delta ))))"
+        tip+=" · steady ${window} (±$(sc_human $(( delta < 0 ? -delta : delta ))))"
       else
-        tip+=" · ${dlabel} in ${SC_TREND_WINDOW_D}d"
+        tip+=" · ${dlabel} ${window}"
       fi
       [[ -n $spark ]] && tip+=" · ${spark}"
     else
@@ -366,18 +372,20 @@ if [[ -n $sizes ]]; then
   local cnt=$(print -r -- "$sizes" | grep -c .)
   local totline="$(sc_human $tot) across ${cnt} watched directories"
   local tseries=$(sc_sizes_total_series 2>/dev/null)
-  local tdelta="" tspark="" ttip="$(sc_human $tot) now"
+  local tdelta="" tspark="" tspan="" ttip="$(sc_human $tot) now"
   if [[ -n $tseries ]]; then
     tdelta=$(print -r -- "$tseries" | sc_series_delta) || tdelta=""
     tspark=$(print -r -- "$tseries" | sc_sparkline)    || tspark=""
+    tspan=$(print -r -- "$tseries" | sc_series_span)   || tspan=""
   fi
   if [[ -n $tdelta ]]; then
     local tlabel=$(sc_human_delta $tdelta)
-    totline+=" · ${tlabel} in ${SC_TREND_WINDOW_D}d"
+    local twindow=$(sc_window_phrase ${tspan:-0})
+    totline+=" · ${tlabel} ${twindow}"
     if [[ $tlabel == steady ]]; then
-      ttip+=" · steady over ${SC_TREND_WINDOW_D}d (±$(sc_human $(( tdelta < 0 ? -tdelta : tdelta ))))"
+      ttip+=" · steady ${twindow} (±$(sc_human $(( tdelta < 0 ? -tdelta : tdelta ))))"
     else
-      ttip+=" · ${tlabel} in ${SC_TREND_WINDOW_D}d"
+      ttip+=" · ${tlabel} ${twindow}"
     fi
     [[ -n $tspark ]] && ttip+=" · ${tspark}"
   else

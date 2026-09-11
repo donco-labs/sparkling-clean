@@ -133,6 +133,9 @@ resolution for watching creep.
 Each refresh is also **appended to a history** rather than overwriting the last
 one, which turns a size into a trend: every row shows which way it has moved
 over the past week, and the footer totals that movement across the whole set.
+The window says how far back to look; the wording says how much history was
+actually there, so a delta drawn from two samples reads `over 12h` rather than
+claiming a week it cannot see.
 Movement under 50 MB reads as `steady`, because `du` rounds and caches breathe.
 A row with only one measurement behind it says `new` and nothing more — that is
 every row for the first week after the history starts. Samples are pruned at 180

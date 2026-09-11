@@ -1139,21 +1139,35 @@ sc_sparkline() {  # reads "<epoch> <bytes>" lines on stdin
   print -r -- "$out"
 }
 
+# How long a stretch of samples actually covers, in words. Each branch carries
+# its own preposition: appending a bare window to a fixed "over " produced
+# "−4.6 GB over under an hour" for any sample under an hour.
+sc_window_phrase() {  # $1 = seconds -> "over 3d" / "over 12h" / "in under an hour"
+  local hours=$(( ${1:-0} / 3600 ))
+  if   (( hours >= 48 )); then print -rn -- "over $(( hours / 24 ))d"
+  elif (( hours >= 1  )); then print -rn -- "over ${hours}h"
+  else                         print -rn -- "in under an hour"
+  fi
+}
+
+# Seconds between the oldest and newest sample on stdin. A window setting says
+# how far back to LOOK; this says how much history was actually there, which for
+# the first week of any install is a great deal less.
+sc_series_span() {  # reads "<epoch> <bytes>" lines on stdin
+  local -a e; local ts by
+  while read -r ts by; do e+=($ts); done
+  (( ${#e} < 2 )) && return 1
+  print -r -- $(( e[-1] - e[1] ))
+}
+
 # Human delta between the oldest and newest sample, with the window it spans.
 sc_free_delta() {  # reads "<epoch> <bytes>" lines on stdin
   local -a e b; local ts by
   while read -r ts by; do e+=($ts); b+=($by); done
   (( ${#b} < 2 )) && return 1
-  local d=$(( b[-1] - b[1] )) hours=$(( (e[-1] - e[1]) / 3600 ))
+  local d=$(( b[-1] - b[1] ))
   local sign="+"; (( d < 0 )) && { sign="−"; d=$(( -d )) }
-  # Each branch carries its own preposition. Appending a bare window to a fixed
-  # "over " produced "−4.6 GB over under an hour" for any sample under an hour.
-  local window
-  if   (( hours >= 48 )); then window="over $(( hours / 24 ))d"
-  elif (( hours >= 1  )); then window="over ${hours}h"
-  else                         window="in under an hour"
-  fi
-  print -r -- "${sign}$(sc_human $d) ${window}"
+  print -r -- "${sign}$(sc_human $d) $(sc_window_phrase $(( e[-1] - e[1] )))"
 }
 
 # --------------------------------------------------------------- execution --
